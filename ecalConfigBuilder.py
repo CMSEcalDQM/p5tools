@@ -325,10 +325,8 @@ def buildEcalDQMProcess(process, options):
           input = cms.untracked.int32(1)
         )
 
-    if central:
-        process.load("DQM.Integration.test.FrontierCondition_GT_cfi")
-    else:
-        process.load("Configuration.StandardSequences.FrontierConditions_GlobalTag_cff")
+    process.load("Configuration.StandardSequences.FrontierConditions_GlobalTag_cff")
+    process.globalTagPrefer = cms.ESPrefer('PoolDBESSource', 'GlobalTag')
 
     if options.globalTag.startswith('auto'):
         from Configuration.AlCa.GlobalTag import GlobalTag
@@ -338,13 +336,13 @@ def buildEcalDQMProcess(process, options):
 
     frontier = options.frontier
 
-    if frontier:
-        process.GlobalTag.connect = frontier + "/CMS_COND_31X_GLOBALTAG"
-    else:
+    if not frontier:
         if p5:
             frontier = 'frontier://(proxyurl=http://localhost:3128)(serverurl=http://localhost:8000/FrontierOnProd)(serverurl=http://localhost:8000/FrontierOnProd)(retrieve-ziplevel=0)'
         else:
             frontier = 'frontier://FrontierProd'
+            
+    process.GlobalTag.connect = frontier + "/CMS_COND_31X_GLOBALTAG"
    
     process.GlobalTag.toGet = cms.VPSet(
         cms.PSet(
