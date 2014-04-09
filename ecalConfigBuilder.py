@@ -149,7 +149,7 @@ def buildEcalDQMProcess(process, options):
             process.ecalMonitorClient.verbosity = verbosity
             if 'Offline' not in options.environment:
                 process.ecalMonitorClient.workers = ["IntegrityClient", "OccupancyClient", "PresampleClient", "RawDataClient", "TimingClient", "SelectiveReadoutClient", "TrigPrimClient", "SummaryClient"]
-                process.ecalMonitorClient.workerParams.SummaryClient.activeSources = ["Integrity", "RawData", "Presample", "TriggerPrimitives", "Timing", "HotCell"]
+                process.ecalMonitorClient.workerParameters.SummaryClient.activeSources = ["Integrity", "RawData", "Presample", "TriggerPrimitives", "Timing", "HotCell"]
                 if live:
                     process.ecalMonitorClient.commonParameters.onlineMode = True
 
