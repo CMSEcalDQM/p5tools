@@ -194,7 +194,7 @@ def buildEcalDQMProcess(process, options):
 #        process.ecalLaserMonitorClient.clientParameters.LightChecker.matacqPlotsDir = "/data/ecalod-disk01/dqm-data/laser"
         pass
 
-    if options.outputMode == 1:
+    if options.outputMode == 1 and not isSource and isClient:
         process.load("DQM.EcalCommon.EcalMEFormatter_cfi")
     
     ### DQM COMMON MODULES ###
@@ -533,7 +533,11 @@ def buildEcalDQMProcess(process, options):
             pass
 
     if options.outputMode == 1:
-        process.dqmOutputPath = cms.EndPath(process.ecalMEFormatter + process.dqmSaver)
+        if not isSource and isClient:
+            process.dqmOutputPath = cms.EndPath(process.ecalMEFormatter + process.dqmSaver)
+        else:
+            process.dqmOutputPath = cms.EndPath(process.dqmSaver)
+            
         schedule.append(process.dqmOutputPath)
     elif options.outputMode == 2:
         process.load("DQMServices.Components.MEtoEDMConverter_cfi")
@@ -640,7 +644,11 @@ if __name__ == '__main__':
         options.inputFiles = options.inputFiles.split(',')
         if not options.inputFiles[0]:
             options.inputFiles = []
-    
+
+        options.laserWavelengths = map(int, options.laserWavelengths.split(','))
+        options.MGPAGains = map(int, options.MGPAGains.split(','))
+        options.MGPAGainsPN = map(int, options.MGPAGainsPN.split(','))
+        
         process = cms.Process("DQM")
         
         buildEcalDQMProcess(process, options)
