@@ -10,7 +10,7 @@ def buildEcalDQMProcess(process, options):
     if options.environment not in ['CMSLive', 'PrivLive', 'PrivOffline', 'LocalLive', 'LocalOffline']:
         raise RuntimeError("environment value " + options.environment + " not correct")
     
-    if options.cfgType not in ['Physics', 'Calibration', 'CalibrationOnly', 'Laser']:
+    if options.cfgType not in ['Physics', 'Calibration', 'CalibrationStandalone', 'Laser']:
         raise RuntimeError("cfgType value " + options.cfgType + " not correct")
 
     if not options.rawDataCollection:
@@ -33,7 +33,7 @@ def buildEcalDQMProcess(process, options):
     p5 = privEcal or central
            
     physics = (options.cfgType == 'Physics')
-    calib = (options.cfgType == 'Calibration' or options.cfgType == 'CalibrationOnly')
+    calib = (options.cfgType == 'Calibration' or options.cfgType == 'CalibrationStandalone')
     laser = (options.cfgType == 'Laser')
 
     verbosity = options.verbosity
@@ -121,7 +121,8 @@ def buildEcalDQMProcess(process, options):
                 EBdigiCollection = "ecalDigis:ebDigis",
                 EEdigiCollection = "ecalDigis:eeDigis"
             )
-        
+
+   
     ### ECAL DQM MODULES ###
 
     if physics:
@@ -167,7 +168,7 @@ def buildEcalDQMProcess(process, options):
             process.ecalPNDiodeMonitorTask.commonParameters.MGPAGainsPN = options.MGPAGainsPN
             process.ecalPNDiodeMonitorTask.verbosity = verbosity
 
-            if options.cfgType == 'Calibration':
+            if options.cfgType == 'CalibrationStandalone':
                 process.load("DQM.EcalBarrelMonitorTasks.EcalMonitorTask_cfi")
                 process.ecalMonitorTask.workers = ["IntegrityTask", "RawDataTask"]
                 process.ecalMonitorTask.collectionTags.Source = options.rawDataCollection
@@ -178,7 +179,7 @@ def buildEcalDQMProcess(process, options):
             process.ecalCalibMonitorClient.commonParameters.MGPAGains = options.MGPAGains
             process.ecalCalibMonitorClient.commonParameters.MGPAGainsPN = options.MGPAGainsPN
             process.ecalCalibMonitorClient.verbosity = verbosity
-            if options.cfgType == 'Calibration':
+            if options.cfgType == 'CalibrationStandalone':
                 process.ecalCalibMonitorClient.workerParameters.SummaryClient.activeSources = ["Integrity", "RawData"]
                 if options.calibType == 'PEDESTAL':
                     process.ecalCalibMonitorClient.workers = ["IntegrityClient", "RawDataClient", "PedestalClient", "PNIntegrityClient", "SummaryClient", "CalibrationSummaryClient"]
@@ -196,7 +197,8 @@ def buildEcalDQMProcess(process, options):
 
     if options.outputMode == 1 and not isSource and isClient:
         process.load("DQM.EcalCommon.EcalMEFormatter_cfi")
-    
+
+
     ### DQM COMMON MODULES ###
     
     process.load("DQMServices.Core.DQM_cfg")
@@ -261,8 +263,8 @@ def buildEcalDQMProcess(process, options):
         elif live:
             process.dqmSaver.convention = "Online"
 
-        if options.outputFile:
-            process.dqmSaver.dirName = options.outputFile
+        if options.outputPath:
+            process.dqmSaver.dirName = options.outputPath
 
     if central:
         # copied from DQM.Integration.test.environment_cfi
@@ -280,7 +282,8 @@ def buildEcalDQMProcess(process, options):
     if options.collector:
         process.DQM.collectorHost = options.collector.split(':')[0]
         process.DQM.collectorPort = int(options.collector.split(':')[1])
-    
+
+
     ### FILTERS ###
 
     process.load("FWCore.Modules.preScaler_cfi")
@@ -489,7 +492,7 @@ def buildEcalDQMProcess(process, options):
 
             schedule.append(process.ecalPedestalPath)
 
-            if options.cfgType == 'Calibration':
+            if options.cfgType == 'CalibrationStandalone':
                 process.ecalMonitorPath = cms.Path(
                     process.ecalPreRecoSequence +
                     process.ecalMonitorTask
@@ -546,7 +549,7 @@ def buildEcalDQMProcess(process, options):
         process.DQMoutput = cms.OutputModule("PoolOutputModule",
             splitLevel = cms.untracked.int32(0),
             outputCommands = cms.untracked.vstring("drop *", "keep *_MEtoEDMConverter_*_*"),
-            fileName = cms.untracked.string(options.outputFile),
+            fileName = cms.untracked.string(options.outputPath),
             dataset = cms.untracked.PSet(
                 filterName = cms.untracked.string(''),
                 dataTier = cms.untracked.string('')
@@ -555,7 +558,7 @@ def buildEcalDQMProcess(process, options):
         process.DQMoutput = cms.OutputModule("PoolOutputModule",
             splitLevel = cms.untracked.int32(0),
             outputCommands = cms.untracked.vstring("drop *", "keep *_MEtoEDMConverter_*_*"),
-            fileName = cms.untracked.string(options.outputFile),
+            fileName = cms.untracked.string(options.outputPath),
             dataset = cms.untracked.PSet(
                 filterName = cms.untracked.string(''),
                 dataTier = cms.untracked.string('')
@@ -615,7 +618,7 @@ if __name__ == '__main__':
     
         configOpts = OptionGroup(optparser, "Job configuration options", "Options passed to the job configuration")
         configOpts.add_option("-e", "--env", dest = "environment", default = "LocalOffline", help = "ENV=(CMSLive|PrivLive|PrivOffline|LocalLive|LocalOffline)", metavar = "ENV")
-        configOpts.add_option("-c", "--cfg-type", dest = "cfgType", default = "Physics", help = "CONFIG=(Physics|Calibration|Laser)", metavar = "CFGTYPE")
+        configOpts.add_option("-c", "--cfg-type", dest = "cfgType", default = "Physics", help = "CONFIG=(Physics|Calibration|CalibrationStandalone|Laser)", metavar = "CFGTYPE")
         configOpts.add_option("-s", "--steps", dest = "steps", default = "sourceclient", help = "STEPS=[source][client]", metavar = "STEPS")
         configOpts.add_option("-i", "--input-files", dest = "inputFiles", default = "", help = "source file name (comma separated) or URL", metavar = "SOURCE")
         configOpts.add_option("-r", "--rawdata", dest = "rawDataCollection", default = "rawDataCollector", help = "collection name", metavar = "RAWDATA")
@@ -630,7 +633,7 @@ if __name__ == '__main__':
         configOpts.add_option("-p", "--pn", dest = "MGPAGainsPN", default = "1,16", help = "PN MGPA gains", metavar = "GAINS")
         configOpts.add_option("-P", "--prescale", dest = "prescaleFactor", default = 1, help = "Prescale factor", metavar = "FACTOR")
         configOpts.add_option("-C", "--collector", dest = "collector", default = "", help = "Collector configuration", metavar = "HOST:PORT")
-        configOpts.add_option("-o", "--output-path", dest = "outputFile", default = "", help = "DQMFileSaver output directory / PoolOutputModule output path", metavar = "DIR")
+        configOpts.add_option("-o", "--output-path", dest = "outputPath", default = "", help = "DQMFileSaver output directory / PoolOutputModule output path", metavar = "DIR")
         configOpts.add_option("-x", "--max-events", type = "int", dest = "maxEvents", default = -1, help = "Maximum events to process", metavar = "VAL")
         configOpts.add_option("-v", "--verbosity", type = "int", dest = "verbosity", default = 0, help = "ECAL DQM verbosity", metavar = "VAL")
         optparser.add_option_group(configOpts)
@@ -648,7 +651,7 @@ if __name__ == '__main__':
         options.laserWavelengths = map(int, options.laserWavelengths.split(','))
         options.MGPAGains = map(int, options.MGPAGains.split(','))
         options.MGPAGainsPN = map(int, options.MGPAGainsPN.split(','))
-        
+
         process = cms.Process("DQM")
         
         buildEcalDQMProcess(process, options)
@@ -658,8 +661,10 @@ if __name__ == '__main__':
         if not fileName:
             if options.cfgType == 'Physics':
                 c = 'ecal'
-            elif 'Calibration' in options.cfgType:
+            elif options.cfgType == 'Calibration':
                 c = 'ecalcalib'
+            elif options.cfgType == 'CalibrationStandalone':
+                c = 'ecalcalibstandalone'
             elif options.cfgType == 'Laser':
                 c = 'ecallaser'
         
@@ -726,8 +731,8 @@ elif runType.getRunType() == runType.hpu_run:
         cfgfile.write("""
 if options.inputFiles:
     process.source.fileNames = options.inputFiles
-if options.outputFile and hasattr(process, 'DQMoutput'):
-    process.DQMoutput.fileName = options.outputFile
+if options.outputPath and hasattr(process, 'DQMoutput'):
+    process.DQMoutput.fileName = options.outputPath
 if options.maxEvents != -1:
     process.maxEvents.input = options.maxEvents
 """)
@@ -742,22 +747,23 @@ if options.maxEvents != -1:
         options._tagOrder.remove('numEvent%d')
         
         options.register("environment", default = "LocalOffline", mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = "ENV=(CMSLive|PrivLive|PrivOffline|LocalLive|LocalOffline)")
-        options.register("cfgType", default = "Physics", mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = "CONFIG=(Physics|Calibration|Laser)")
+        options.register("cfgType", default = "Physics", mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = "CONFIG=(Physics|Calibration|CalibrationStandalone|Laser)")
         options.register("steps", default = "sourceclient", mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = "DQM steps to perform")
         options.register("rawDataCollection", default = "rawDataCollector", mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = "collection name")
         options.register("frontier", default = "", mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = "Frontier URL")
-        options.register("globalTag", mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = "GlobalTag")
+        options.register("globalTag", default = "auto:com10", mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = "GlobalTag")
         options.register("outputMode", default = 1, mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.int, info = "0: no output, 1: DQM output, 2: EDM output")
-        options.register("workflow", mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = "offline workflow")
+        options.register("outputPath", default = "", mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = "DQMFileSaver output directory / PoolOutputModule output path")
+        options.register("workflow", default = "", mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = "offline workflow")
         options.register("useGEDClusters", default = False, mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.bool, info = 'switch for GED clusters')
-        options.register("calibType", mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = "ECAL run type")
+        options.register("calibType", default = "", mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = "ECAL run type")
         options.register("laserWavelengths", default = '1, 2, 3, 4', mult = VarParsing.multiplicity.list, mytype = VarParsing.varType.int, info = "Laser wavelengths")
         options.register("MGPAGains", default = '1, 6, 12', mult = VarParsing.multiplicity.list, mytype = VarParsing.varType.int, info = "MGPA gains")
         options.register("MGPAGainsPN", default = '1, 16', mult = VarParsing.multiplicity.list, mytype = VarParsing.varType.int, info = "PN MGPA gains")
         options.register('prescaleFactor', default = 1, mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.int, info = 'Prescale factor')
         options.register('runkey', default = 'pp_run', mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = 'Run Keys of CMS')
-        options.register('collector', mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = 'Collector configuration (host:port)')
-        options.register('verbosity', mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.int, info = 'ECAL DQM verbosity')
+        options.register('collector', default = "", mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = 'Collector configuration (host:port)')
+        options.register('verbosity', default = 0, mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.int, info = 'ECAL DQM verbosity')
     
         options.clearList('laserWavelengths')
         options.clearList('MGPAGains')
@@ -767,11 +773,11 @@ if options.maxEvents != -1:
         options.setDefault('MGPAGainsPN', '1, 16')
     
         options.parseArguments()
-    
+
         process = cms.Process("DQM")
-    
+
         buildEcalDQMProcess(process, options)
-    
+
         if options.cfgType == 'Physics' and 'Live' in options.environment:
             from DQM.Integration.test.dqmPythonTypes import *
             runType = RunType(['pp_run','cosmic_run','hi_run','hpu_run'])
