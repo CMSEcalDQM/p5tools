@@ -1,6 +1,4 @@
-import sys
-
-def buildEcalDQMProcess(process, options):
+def buildEcalDQMModules(process, options):
     """
     Build a standalone cms.Process that can be used for (quasi-)online DQM and local testing
     """
@@ -75,11 +73,6 @@ def buildEcalDQMProcess(process, options):
                 process.load("RecoLocalTracker.Configuration.RecoLocalTracker_cff")
                 process.load("RecoPixelVertexing.Configuration.RecoPixelVertexing_cff")
                 process.load("RecoTracker.Configuration.RecoTracker_cff")
-                process.iterTracking.remove(process.earlyMuons)
-                process.iterTracking.remove(process.muonSeededSeedsInOut)
-                process.iterTracking.remove(process.muonSeededTrackCandidatesInOut)
-                process.iterTracking.remove(process.muonSeededSeedsOutIn)
-                process.iterTracking.remove(process.muonSeededTrackCandidatesOutIn)
                 process.load("RecoVertex.PrimaryVertexProducer.OfflinePrimaryVertices_cfi")
                 process.load("RecoParticleFlow.PFClusterProducer.particleFlowRecHitECAL_cfi")
                 process.load("RecoParticleFlow.PFClusterProducer.particleFlowRecHitPS_cfi")
@@ -166,7 +159,7 @@ def buildEcalDQMProcess(process, options):
             process.ecalTestPulseMonitorTask.verbosity = verbosity
             process.ecalPNDiodeMonitorTask.verbosity = verbosity
 
-            if options.cfgType == 'Calibration':
+            if options.cfgType == 'CalibrationStandalone':
                 process.load("DQM.EcalMonitorTasks.EcalMonitorTask_cfi")
                 process.ecalMonitorTask.workers = ["IntegrityTask", "RawDataTask"]
                 process.ecalMonitorTask.collectionTags.Source = options.rawDataCollection
@@ -174,7 +167,7 @@ def buildEcalDQMProcess(process, options):
         if isClient:
             process.load("DQM.EcalMonitorClient.EcalCalibMonitorClient_cfi")
             process.ecalCalibMonitorClient.verbosity = verbosity
-            if options.cfgType == 'Calibration':
+            if options.cfgType == 'CalibrationStandalone':
                 process.ecalCalibMonitorClient.workerParameters.SummaryClient.params.activeSources = ["Integrity", "RawData"]
                 if options.calibType == 'PEDESTAL':
                     process.ecalCalibMonitorClient.workers = ["IntegrityClient", "RawDataClient", "PedestalClient", "PNIntegrityClient", "SummaryClient", "CalibrationSummaryClient"]
@@ -232,22 +225,10 @@ def buildEcalDQMProcess(process, options):
             process.DQMStore.referenceFileName = referencePath + 'ecalcalib_reference.root'
 
     if options.outputMode == 1:
-        process.dqmSaver.convention = "Offline"
-        process.dqmSaver.referenceHandling = "skip"
-        process.dqmSaver.workflow = options.workflow
-
-        if central:
-            # copied from DQM.Integration.test.environment_cfi
-            process.dqmSaver.convention = 'Online'
-            process.dqmSaver.referenceHandling = 'all'
-            process.dqmSaver.producer = 'DQM'
-            process.dqmSaver.saveByTime = 1
-            process.dqmSaver.saveByLumiSection = -1
-            process.dqmSaver.saveByMinute = 8
-            process.dqmSaver.saveByRun = 1
-            process.dqmSaver.saveAtJobEnd = False
-            process.dqmSaver.dirName = '/home/dqmprolocal/output'
-        elif privEcal:
+        if privEcal:
+            process.dqmSaver.convention = "Offline"
+            process.dqmSaver.referenceHandling = "skip"
+            process.dqmSaver.workflow = options.workflow
             process.dqmSaver.saveByTime = -1
             process.dqmSaver.saveByMinute = -1
             process.dqmSaver.dirName = "/data/ecalod-disk01/dqm-data/tmp"            
@@ -258,23 +239,25 @@ def buildEcalDQMProcess(process, options):
                 else:
                     process.dqmSaver.version = 2
 
-        elif live:
-            process.dqmSaver.convention = "Online"
+        elif not central:
+            process.dqmSaver.referenceHandling = "skip"
+            process.dqmSaver.workflow = options.workflow
+
+            if live:
+                process.dqmSaver.convention = "Online"
+            else:
+                process.dqmSaver.convention = "Offline"
 
         if options.outputPath:
             process.dqmSaver.dirName = options.outputPath
 
-    if central:
-        # copied from DQM.Integration.test.environment_cfi
-        process.DQM.collectorHost = 'dqm-prod-local.cms'
-        process.DQM.collectorPort = 9090
-    elif live and privEcal:
+    if live and privEcal:
         process.DQM.collectorHost = "ecalod-web01.cms"
         process.DQM.collectorPort = 9190
     elif live and local:
         process.DQM.collectorHost = "localhost"
         process.DQM.collectorPort = 8061
-    else:
+    elif not central:
         process.DQM.collectorHost = ""
 
     if options.collector:
@@ -314,6 +297,7 @@ def buildEcalDQMProcess(process, options):
                 EcalRawDataCollection = cms.InputTag("ecalDigis"),
                 pedestalPrescaleFactor = cms.untracked.int32(1)
             )
+
   
     ### JOB PARAMETERS ###
 
@@ -326,12 +310,8 @@ def buildEcalDQMProcess(process, options):
           input = cms.untracked.int32(1)
         )
 
-    frontier = options.frontier
-
     if p5:
         process.load('DQM.Integration.test.FrontierCondition_GT_cfi')
-        if not frontier:
-            frontier = str(process.GlobalTag.pfnPrefix)
     else:
         process.load("Configuration.StandardSequences.FrontierConditions_GlobalTag_cff")
         if options.globalTag.startswith('auto:'):
@@ -340,23 +320,18 @@ def buildEcalDQMProcess(process, options):
         else:
             process.GlobalTag.globaltag = options.globalTag
 
-        if not frontier:
-            frontier = 'frontier://FrontierProd'
-            
-        process.GlobalTag.connect = frontier + "/CMS_COND_31X_GLOBALTAG"            
-
         process.globalTagPrefer = cms.ESPrefer('PoolDBESSource', 'GlobalTag')
    
     process.GlobalTag.toGet = cms.VPSet(
         cms.PSet(
             record = cms.string("EcalDQMChannelStatusRcd"),
             tag = cms.string("EcalDQMChannelStatus_v1_hlt"),
-            connect = cms.untracked.string(frontier + "/CMS_COND_34X_ECAL")
+            connect = cms.untracked.string(process.GlobalTag.connect.value().replace('CMS_COND_31X_GLOBALTAG', 'CMS_COND_34X_ECAL'))
         ),
         cms.PSet(
             record = cms.string("EcalDQMTowerStatusRcd"),
             tag = cms.string("EcalDQMTowerStatus_v1_hlt"),
-            connect = cms.untracked.string(frontier + "/CMS_COND_34X_ECAL")
+            connect = cms.untracked.string(process.GlobalTag.connect.value().replace('CMS_COND_31X_GLOBALTAG', 'CMS_COND_34X_ECAL'))
         )
     )
 
@@ -372,29 +347,75 @@ def buildEcalDQMProcess(process, options):
         destinations = cms.untracked.vstring("cerr")
     )
 
+    ### SOURCE ###
     
-    ### SEQUENCES AND PATHS ###
+    if live:
+        process.emptyload("DQM.Integration.test.inputsource_cfi")  # input source uses VarParsing (Jul 2 2014)
 
-    schedule = []
+#        if options.rawDataCollection == 'hltEcalCalibrationRaw':
+#            process.source.SelectHLTOutput = 'hltOutputCalibration'
+#            process.source.SelectEvents = cms.untracked.PSet(SelectEvents = cms.vstring("HLT_EcalCalibration_v*"))
+#        else:
+#            process.source.SelectHLTOutput = 'hltOutputA'
+
+    else:
+        if '.dat' in options.inputFiles[0]:
+            process.source = cms.Source("NewEventStreamFileReader")
+        else:
+            process.source = cms.Source("PoolSource")
+
+        process.source.fileNames = cms.untracked.vstring(options.inputFiles)
+
+#def buildEcalDQMProcess
+
+def buildEcalDQMSequences(process, options):
+
+    isSource = ('source' in options.steps)
+    isClient = ('client' in options.steps)
+
+    central = (options.environment == 'CMSLive')
+    privEcal = ('Priv' in options.environment)
+    local = ('Local' in options.environment)
+    live = ('Live' in options.environment)
+
+    p5 = privEcal or central
+           
+    physics = (options.cfgType == 'Physics')
+    calib = (options.cfgType == 'Calibration' or options.cfgType == 'CalibrationStandalone')
+    laser = (options.cfgType == 'Laser')
+
+    verbosity = options.verbosity
+    if verbosity < 0:
+        if local: verbosity = 2
+        else: verbosity = 0
+
+    ### SEQUENCES ###
+
+    process.ecalPreRecoSequence = cms.Sequence(process.ecalDigis)
 
     if isSource:
-        if not laser:
-            process.ecalPreRecoSequence = cms.Sequence(
-                process.ecalDigis
-            )
+        process.ecalRecoSequence = cms.Sequence()
 
-            process.ecalRecoSequence = cms.Sequence(
+        if not laser:
+            process.ecalRecoSequence += cms.Sequence(
                 process.ecalGlobalUncalibRecHit +
                 process.ecalDetIdToBeRecovered +
                 process.ecalRecHit
             )
         
         if physics:
-            process.ecalRecoSequence.insert(process.ecalRecoSequence.index(process.ecalRecHit), process.simEcalTriggerPrimitiveDigis)
-            process.ecalRecoSequence.insert(process.ecalRecoSequence.index(process.ecalRecHit), process.gtDigis)
+            process.ecalRecoSequence += cms.Sequence(
+                process.simEcalTriggerPrimitiveDigis +
+                process.gtDigis
+            )
             
             if options.useGEDClusters:
-                process.ecalClusterSequence = cms.Sequence(
+                process.iterTracking.remove(process.earlyMuons)
+                process.iterTracking.remove(process.muonSeededSeedsInOut)
+                process.iterTracking.remove(process.muonSeededTrackCandidatesInOut)
+                process.iterTracking.remove(process.muonSeededSeedsOutIn)
+                process.iterTracking.remove(process.muonSeededTrackCandidatesOutIn)
+                process.ecalRecoSequence += cms.Sequence(
                     process.ecalPreshowerDigis +
                     process.ecalPreshowerRecHit +
                     process.particleFlowRecHitECAL +
@@ -412,41 +433,45 @@ def buildEcalDQMProcess(process, options):
                     process.particleFlowSuperClusterECAL
                 )
             else:
-                process.ecalClusterSequence = cms.Sequence(
+                process.multi5x5ClusteringSequence.remove(process.multi5x5SuperClustersWithPreshower)
+                process.ecalRecoSequence += cms.Sequence(
                     process.hybridClusteringSequence +
                     process.multi5x5ClusteringSequence
                 )
-                process.ecalClusterSequence.remove(process.multi5x5SuperClustersWithPreshower)
 
-            process.ecalMonitorPath = cms.Path(
-                process.preScaler +
-                process.ecalPreRecoSequence +
-                process.ecalRecoSequence +
-                process.ecalClusterSequence +
-                process.ecalMonitorTask
-            )
-
-            if live:
-                process.ecalMonitorPath.insert(process.ecalMonitorPath.index(process.ecalRecoSequence), process.ecalPhysicsFilter)
-            else:
+            if not live:
                 if options.useGEDClusters:
-                    process.additionalRecoSequence = cms.Sequence(
+                    process.ecalRecoSequence += cms.Sequence(
                         process.interestingEcalDetIdPFEB +
                         process.interestingEcalDetIdPFEE +
                         process.reducedEcalRecHitsEB +
                         process.reducedEcalRecHitsEE
                     )
                 else:
-                    process.additionalRecoSequence = cms.Sequence(
+                    process.ecalRecoRecoSequence += cms.Sequence(
                         process.interestingEcalDetIdEB +
                         process.interestingEcalDetIdEE +
                         process.reducedEcalRecHitsEB +
                         process.reducedEcalRecHitsEE
                     )
-   
-                process.ecalMonitorPath.insert(process.ecalMonitorPath.index(process.ecalMonitorTask), process.additionalRecoSequence)
+                    
+    ### PATHS ###
 
-            schedule.append(process.ecalMonitorPath)
+        paths = []
+        endpaths = []
+
+        if physics:
+            process.ecalMonitorPath = cms.Path(
+                process.preScaler +
+                process.ecalPreRecoSequence +
+                process.ecalRecoSequence +
+                process.ecalMonitorTask
+            )
+
+            if live:
+                process.ecalMonitorPath.insert(process.ecalMonitorPath.index(process.ecalRecoSequence), process.ecalPhysicsFilter)
+
+            paths.append(process.ecalMonitorPath)
 
         elif calib:
             process.ecalLaserLedPath = cms.Path(
@@ -461,7 +486,7 @@ def buildEcalDQMProcess(process, options):
                 process.ecalLaserLedPath.insert(1, process.ecalLaserLedFilter)
                 process.ecalLaserLedPath.insert(0, process.preScaler)
 
-            schedule.append(process.ecalLaserLedPath)
+            paths.append(process.ecalLaserLedPath)
     
             process.ecalTestPulsePath = cms.Path(
                 process.ecalPreRecoSequence +
@@ -475,7 +500,7 @@ def buildEcalDQMProcess(process, options):
                 process.ecalTestPulsePath.insert(1, process.ecalTestPulseFilter)
                 process.ecalTestPulsePath.insert(0, process.preScaler)
 
-            schedule.append(process.ecalTestPulsePath)
+            paths.append(process.ecalTestPulsePath)
     
             process.ecalPedestalPath = cms.Path(
                 process.ecalPreRecoSequence +
@@ -489,7 +514,7 @@ def buildEcalDQMProcess(process, options):
                 process.ecalPedestalPath.insert(1, process.ecalPedestalFilter)
                 process.ecalPedestalPath.insert(0, process.preScaler)
 
-            schedule.append(process.ecalPedestalPath)
+            paths.append(process.ecalPedestalPath)
 
             if options.cfgType == 'CalibrationStandalone':
                 process.ecalMonitorPath = cms.Path(
@@ -497,11 +522,11 @@ def buildEcalDQMProcess(process, options):
                     process.ecalMonitorTask
                 )
 
-                schedule.append(process.ecalMonitorPath)
+                paths.append(process.ecalMonitorPath)
 
         process.dqmEndPath = cms.EndPath(process.dqmEnv)
 
-        schedule.append(process.dqmEndPath)
+        endpaths.append(process.dqmEndPath)
             
     if isClient:
         if physics:
@@ -514,8 +539,12 @@ def buildEcalDQMProcess(process, options):
                 process.ecalClientPath.insert(1, process.ecalPhysicsFilter)
                 process.ecalClientPath.insert(0, process.preScaler)
 
-            schedule.append(process.ecalClientPath)
-#            process.dqmEndPath.insert(1, process.dqmQTest)
+            paths.append(process.ecalClientPath)
+
+#            process.dqmQTestPath = cms.EndPath(process.dqmQTest)
+
+#            endpaths.append(process.dqmQTestPath)
+
         elif calib:    
             process.ecalClientPath = cms.Path(
                 process.ecalPreRecoSequence +
@@ -527,7 +556,8 @@ def buildEcalDQMProcess(process, options):
                 process.ecalClientPath.insert(1, process.ecalCalibrationFilter)
                 process.ecalClientPath.insert(0, process.preScaler)
 
-            schedule.append(process.ecalClientPath)
+            paths.append(process.ecalClientPath)
+
         elif laser:
 #            process.ecalMonitorPath = cms.Path(
 #                process.ecalLaserMonitorClient
@@ -540,7 +570,8 @@ def buildEcalDQMProcess(process, options):
         else:
             process.dqmOutputPath = cms.EndPath(process.dqmSaver)
             
-        schedule.append(process.dqmOutputPath)
+        endpaths.append(process.dqmOutputPath)
+
     elif options.outputMode == 2:
         process.load("DQMServices.Components.MEtoEDMConverter_cfi")
         process.dqmEndPath.insert(1, process.MEtoEDMConverter)
@@ -557,50 +588,140 @@ def buildEcalDQMProcess(process, options):
 
         process.dqmOutputPath = cms.EndPath(process.DQMoutput)
 
-        schedule.append(process.dqmOutputPath)
+        endpaths.append(process.dqmOutputPath)
 
-    process.schedule = cms.Schedule(*schedule)
-    
-    ### SOURCE ###
-    
-    if live:
-        #process.load("DQM.Integration.test.inputsource_cfi")
-        # input source uses VarParsing (Jul 2 2014)
-        # options.inputFiles must be [inputDir, runNumber] in this case
-        process.source = cms.Source("DQMStreamerReader",
-            runNumber = cms.untracked.uint32(int(options.inputFiles[1])),
-            runInputDir = cms.untracked.string(options.inputFiles[0]),
-            streamLabel = cms.untracked.string(''),
-            minEventsPerLumi = cms.untracked.int32(1),
-            delayMillis = cms.untracked.uint32(500),
-            skipFirstLumis = cms.untracked.bool(False),
-            deleteDatFiles = cms.untracked.bool(False),
-            endOfRunKills  = cms.untracked.bool(True),
-        )
-
-#        if options.rawDataCollection == 'hltEcalCalibrationRaw':
-#            process.source.SelectHLTOutput = 'hltOutputCalibration'
-#            process.source.SelectEvents = cms.untracked.PSet(SelectEvents = cms.vstring("HLT_EcalCalibration_v*"))
-#        else:
-#            process.source.SelectHLTOutput = 'hltOutputA'
-
-    else:
-        if '.dat' in options.inputFiles[0]:
-            process.source = cms.Source("NewEventStreamFileReader")
-        else:
-            process.source = cms.Source("PoolSource")
-
-        process.source.fileNames = cms.untracked.vstring(options.inputFiles)
-
+    process.schedule = cms.Schedule(*(paths + endpaths))
 
     process.prune()
+    
+#def buildEcalDQMSequences
 
-#def buildEcalDQMProcess
     
 if __name__ == '__main__':
+    import sys
     if 'FWCore.ParameterSet.Config' not in sys.modules: #standalone python
         # cmsRun executes import FWCore.ParameterSet.Config as cms before running the configuration file via execfile()
         # __name__ == '__main__' cannot distinguish the standalone python and cmsRun usages, because any file executed through execfile is a main
+
+        class CustomDefAttr(object):
+            def __init__(self, name, cmsObject):
+                self._name = name
+                self._cmsObject = cmsObject
+                self._subattr = {}
+                self._explicit = {} # objects set by actual assignment
+
+            def generateAttr(self):
+                output = []
+                for name, value in self._explicit.items():
+                    output.append([name, value])
+
+                for value in self._subattr.values():
+                    output += value.generateAttr()
+
+                if len(self._explicit) == 0 and len(self._subattr) == 0:
+                    output.append([self._cmsObject])
+
+                for line in output:
+                    line.insert(0, self._name)
+                    
+                return output
+
+            def __getattr__(self, name):
+                if name in self._explicit:
+                    return self._explicit[name]
+
+                if name not in self._subattr:
+                    self._subattr[name] = CustomDefAttr(name, getattr(self._cmsObject, name))
+
+                return self._subattr[name]
+
+            def __setattr__(self, name, value):
+                if name.startswith('_'):
+                    object.__setattr__(self, name, value)
+                else:
+                    setattr(self._cmsObject, name, value)
+                    self._explicit[name] = value
+
+            def __call__(self, *args):
+                return self._cmsObject(*args)
+                
+
+        class CfgGenerator(CustomDefAttr):
+            def __init__(self, name):
+                CustomDefAttr.__init__(self, name, cms.Process('DQM'))
+                self._loadPaths = []
+
+            def load(self, path):
+                self._cmsObject.load(path)
+                self._loadPaths.append(path)
+
+            def emptyload(self, path):
+                self._loadPaths.append(path)
+
+            def generate(self):
+                output = 'process = cms.Process("' + self._name + '")\n\n'
+
+                output += '### Load cfis ###\n\n'
+
+                for path in self._loadPaths:
+                    output += 'process.load("' + path + '")\n'
+
+                output += '\n'
+
+                output += '### Individual module setups ###\n'
+
+                topComponent = ''
+
+                for line in self.generateAttr():
+                    if callable(line[-1]):
+                        continue
+
+                    if topComponent != line[1]:
+                        output += '\n'
+                        topComponent = line[1]
+
+                    output += '.'.join(line[0:-1]) + ' = '
+        
+                    if isinstance(line[-1], cms._ParameterTypeBase) or isinstance(line[-1], cms._ConfigureComponent):
+                        dump = line[-1].dumpPython(cms.PrintOptions())
+                        output += dump
+                        if dump[-1] != '\n': output += '\n'
+                    elif type(line[-1]) == str:
+                        output += '"' + line[-1] + '"\n'
+                    else:
+                        output += str(line[-1]) + '\n'
+
+                output += '\n'
+
+                output += '### Sequences ###\n\n'
+
+                for name, seq in self._cmsObject.sequences.items():
+                    output += 'process.' + name + ' = ' + seq.dumpPython(cms.PrintOptions())
+
+                output += '\n'
+
+                output += '### Paths ###\n\n'
+
+                paths = []
+
+                for name, path in self._cmsObject.paths.items():
+                    output += 'process.' + name + ' = ' + path.dumpPython(cms.PrintOptions())
+                    paths.append('process.' + name)
+
+                output += '\n'
+
+                for name, path in self._cmsObject.endpaths.items():
+                    output += 'process.' + name + ' = ' + path.dumpPython(cms.PrintOptions())
+                    paths.append('process.' + name)
+
+                output += '\n'
+
+                output += '### Schedule ###\n\n'
+
+                output += 'process.schedule = cms.Schedule(' + ','.join(paths) + ')\n'
+
+                return output
+                
         
         import FWCore.ParameterSet.Config as cms
         from optparse import OptionParser, OptionGroup
@@ -614,13 +735,12 @@ if __name__ == '__main__':
         commonOpts.add_option("-s", "--steps", dest = "steps", default = "sourceclient", help = "STEPS=[source][client]", metavar = "STEPS")
         commonOpts.add_option("-i", "--input-files", dest = "inputFiles", default = "", help = "source file name (comma separated) or URL", metavar = "SOURCE")
         commonOpts.add_option("-r", "--rawdata", dest = "rawDataCollection", default = "rawDataCollector", help = "collection name", metavar = "RAWDATA")
-        commonOpts.add_option("-F", "--frontier-URL", dest = "frontier", default = "", help = "frontier URL", metavar = "URL")
         commonOpts.add_option("-g", "--global-tag", dest = "globalTag", default = "auto:com10", help = "global tag", metavar = "TAG")
         commonOpts.add_option("-O", "--output-mode", type = "int", dest = "outputMode", default = 1, help = "0: no output, 1: DQM output, 2: EDM output", metavar = "MODE")
         commonOpts.add_option("-w", "--workflow", dest = "workflow", default = "", help = "offline workflow", metavar = "WORKFLOW")
         commonOpts.add_option("-G", "--use-GED", dest = "useGEDClusters", action = "store_true", default = False, help = "switch for GED clusters")
         commonOpts.add_option("-C", "--collector", dest = "collector", default = "", help = "Collector configuration", metavar = "HOST:PORT")
-        commonOpts.add_option("-o", "--output-path", dest = "outputFile", default = "", help = "DQMFileSaver output directory / PoolOutputModule output path", metavar = "DIR")
+        commonOpts.add_option("-o", "--output-path", dest = "outputPath", default = "", help = "DQMFileSaver output directory / PoolOutputModule output path", metavar = "DIR")
         commonOpts.add_option("-x", "--max-events", type = "int", dest = "maxEvents", default = -1, help = "Maximum events to process", metavar = "VAL")
         commonOpts.add_option("-P", "--prescale", dest = "prescaleFactor", default = 1, help = "Prescale factor", metavar = "FACTOR")
         commonOpts.add_option("-v", "--verbosity", type = "int", dest = "verbosity", default = 0, help = "ECAL DQM verbosity", metavar = "VAL")
@@ -651,9 +771,12 @@ if __name__ == '__main__':
         options.MGPAGains = map(int, options.MGPAGains.split(','))
         options.MGPAGainsPN = map(int, options.MGPAGainsPN.split(','))
 
-        process = cms.Process("DQM")
-        
-        buildEcalDQMProcess(process, options)
+#        process = cms.Process("DQM")
+        generator = CfgGenerator('process')
+
+        buildEcalDQMModules(generator, options)
+#        print generator._cmsObject.dumpPython()
+        buildEcalDQMSequences(generator._cmsObject, options)
     
         # write cfg file
         fileName = options.file
@@ -680,58 +803,29 @@ if __name__ == '__main__':
         
         cfgfile = file(fileName, "w")
     
-        cfgfile.write("### AUTO-GENERATED CMSRUN CONFIGURATION FOR ECAL DQM ###")
-    
-        # VarParsing and OptionParser cannot coexist
-        # copied from DQM.Integration.test.environment_cfi
-        cfgfile.write("""
-from FWCore.ParameterSet.VarParsing import VarParsing
+        cfgfile.write("### AUTO-GENERATED CMSRUN CONFIGURATION FOR ECAL DQM ###\n\n")
+        cfgfile.write("import FWCore.ParameterSet.Config as cms\n\n")
 
-options = VarParsing('analysis')
-options.register('runkey', default = 'pp_run', mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = 'Run Keys of CMS')
-options.register('runNumber', default = 194533, mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.int, info = "Run number.")
-options.register('runInputDir', default = '/fff/BU0/test', mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = "Directory where the DQM files will appear.")
-options.register('skipFirstLumis', default = False, mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.bool, info = "Skip (and ignore the minEventsPerLumi parameter) for the files which have been available at the begining of the processing.")
-
-options.parseArguments()
-
-""")
-        if 'Live' in options.environment:
-            cfgfile.write("""
-from DQM.Integration.test.dqmPythonTypes import *
-runType = RunType(['pp_run','cosmic_run','hi_run','hpu_run'])
-if not options.runkey.strip():
-    options.runkey = 'pp_run'
-
-runType.setRunType(options.runkey.strip())
-
-""")
-            
-        cfgfile.write(process.dumpPython())
+        cfgfile.write(generator.generate())
     
         if 'Live' in options.environment:
-            cfgfile.write("""
-### Setup source ###
-process.source.runNumber = options.runNumber
-process.source.runInputDir = options.runInputDir
-process.source.skipFirstLumis = options.skipFirstLumis
-""")
             if options.cfgType == 'Physics':
                 cfgfile.write("""
 ### Run type specific ###
 
 referenceFileName = process.DQMStore.referenceFileName.pythonValue()
-if runType.getRunType() == runType.pp_run:
+runTypeName = process.runType.getRunTypeName()
+if runTypeName == 'pp_run':
     process.DQMStore.referenceFileName = referenceFileName.replace('.root', '_pp.root')
-elif runType.getRunType() == runType.cosmic_run:
+elif runTypeName == 'cosmic_run':
     process.DQMStore.referenceFileName = referenceFileName.replace('.root', '_cosmic.root')
 #    process.dqmEndPath.remove(process.dqmQTest)
     process.ecalMonitorTask.workers = ['EnergyTask', 'IntegrityTask', 'OccupancyTask', 'RawDataTask', 'TrigPrimTask', 'PresampleTask', 'SelectiveReadoutTask']
     process.ecalMonitorClient.workers = ['IntegrityClient', 'OccupancyClient', 'PresampleClient', 'RawDataClient', 'SelectiveReadoutClient', 'TrigPrimClient', 'SummaryClient']
     process.ecalMonitorClient.workerParameters.SummaryClient.params.activeSources = ['Integrity', 'RawData', 'Presample', 'TriggerPrimitives', 'HotCell']
-elif runType.getRunType() == runType.hi_run:
+elif runTypeName == runType.hi_run:
     process.DQMStore.referenceFileName = referenceFileName.replace('.root', '_hi.root')
-elif runType.getRunType() == runType.hpu_run:
+elif runTypeName == runType.hpu_run:
     process.DQMStore.referenceFileName = referenceFileName.replace('.root', '_hpu.root')
     process.source.SelectEvents = cms.untracked.PSet(SelectEvents = cms.vstring('*'))
 """)
@@ -766,7 +860,6 @@ if options.outputFile:
         options.register("cfgType", default = "Physics", mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = "CONFIG=(Physics|Calibration|CalibrationStandalone|Laser)")
         options.register("steps", default = "sourceclient", mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = "DQM steps to perform")
         options.register("rawDataCollection", default = "rawDataCollector", mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = "collection name")
-        options.register("frontier", default = "", mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = "Frontier URL")
         options.register("globalTag", default = 'auto:com10', mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = "GlobalTag")
         options.register("outputMode", default = 1, mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.int, info = "0: no output, 1: DQM output, 2: EDM output")
         options.register("outputPath", default = "", mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = "DQMFileSaver output directory / PoolOutputModule output path")
@@ -792,7 +885,10 @@ if options.outputFile:
 
         process = cms.Process("DQM")
 
-        buildEcalDQMProcess(process, options)
+        buildEcalDQMModules(process, options)
+        buildEcalDQMSequences(process, options)
+
+        process.prune()
 
         if options.cfgType == 'Physics' and 'Live' in options.environment:
             from DQM.Integration.test.dqmPythonTypes import *
