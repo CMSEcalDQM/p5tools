@@ -70,7 +70,7 @@ class EcalCondDB(object):
             
         self._cur.execute('INSERT INTO MON_RUN_IOV (IOV_ID, TAG_ID, RUN_IOV_ID, SUBRUN_NUM, SUBRUN_START, SUBRUN_END)\
         VALUES\
-        (MON_RUN_IOV_SQ.NextVal, :tag, :runiov, 1, :stt, :edt)',
+        (mon_run_iov_sq.NextVal, :tag, :runiov, 1, :stt, :edt)',
                           tag = monRunTag.TAG_ID,
                           runiov = runIOV_.IOV_ID,
                           stt = runIOV_.RUN_START,
