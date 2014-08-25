@@ -25,9 +25,6 @@ def buildEcalDQMModules(process, options):
     local = ('Local' in options.environment)
     live = ('Live' in options.environment)
 
-    if not central and (len(options.inputFiles) == 0 or not isSource):
-        raise RuntimeError("Live mode requires a source to run")
-
     p5 = privEcal or central
            
     physics = (options.cfgType == 'Physics')
@@ -194,6 +191,13 @@ def buildEcalDQMModules(process, options):
     else:
         process.load("DQMServices.Core.DQM_cfg")
         process.load("DQMServices.Components.DQMEnvironment_cfi")
+        process.DQM = cms.Service("DQM",                                                                                                                                                                           
+            debug = cms.untracked.bool(False),
+            publishFrequency = cms.untracked.double(5.0),
+            collectorPort = cms.untracked.int32(0),
+            collectorHost = cms.untracked.string(''),
+            filter = cms.untracked.string('')
+        )      
     
     if physics:
         if isSource:
@@ -226,18 +230,13 @@ def buildEcalDQMModules(process, options):
 
     if options.outputMode == 1:
         if privEcal:
+            if not options.workflow:
+                raise RuntimeError('No workflow parameter')
+
             process.dqmSaver.convention = "Offline"
             process.dqmSaver.referenceHandling = "skip"
             process.dqmSaver.workflow = options.workflow
-            process.dqmSaver.saveByTime = -1
-            process.dqmSaver.saveByMinute = -1
             process.dqmSaver.dirName = "/data/ecalod-disk01/dqm-data/tmp"            
-            # for privEcal online DQM, output will be stored as Offline files with versions
-            if live:
-                if physics:
-                    process.dqmSaver.version = 1
-                else:
-                    process.dqmSaver.version = 2
 
         elif not central:
             process.dqmSaver.referenceHandling = "skip"
@@ -247,6 +246,12 @@ def buildEcalDQMModules(process, options):
                 process.dqmSaver.convention = "Online"
             else:
                 process.dqmSaver.convention = "Offline"
+
+        if process.dqmSaver.convention == 'Offline':
+            if physics:
+                process.dqmSaver.version = 1
+            else:
+                process.dqmSaver.version = 2
 
         if options.outputPath:
             process.dqmSaver.dirName = options.outputPath
@@ -312,6 +317,8 @@ def buildEcalDQMModules(process, options):
 
     if p5:
         process.load('DQM.Integration.test.FrontierCondition_GT_cfi')
+        # temporary hack until squid is installed on ecalod-dqm (Aug 25 2014 yiiyama)
+        process.GlobalTag.pfnPrefix = cms.untracked.string("frontier://(proxyurl=http://frontier.cms:3128)(serverurl=http://frontier.cms:8000/FrontierOnProd)(serverurl=http://frontier.cms:8000/FrontierOnProd)(retrieve-ziplevel=0)(failovertoserver=no)/")
     else:
         process.load("Configuration.StandardSequences.FrontierConditions_GlobalTag_cff")
         if options.globalTag.startswith('auto:'):
@@ -364,7 +371,16 @@ def buildEcalDQMModules(process, options):
         else:
             process.source = cms.Source("PoolSource")
 
-        process.source.fileNames = cms.untracked.vstring(options.inputFiles)
+        if options.inputList:
+            inputFiles = []
+            with open(options.inputList) as sourceList:
+                for line in sourceList:
+                    inputFiles.append(line.strip())
+
+            process.source.fileNames = cms.untracked.vstring(inputFiles)
+
+        elif options.inputFiles:
+            process.source.fileNames = cms.untracked.vstring(options.inputFiles)
 
 #def buildEcalDQMProcess
 
@@ -448,7 +464,7 @@ def buildEcalDQMSequences(process, options):
                         process.reducedEcalRecHitsEE
                     )
                 else:
-                    process.ecalRecoRecoSequence += cms.Sequence(
+                    process.ecalRecoSequence += cms.Sequence(
                         process.interestingEcalDetIdEB +
                         process.interestingEcalDetIdEE +
                         process.reducedEcalRecHitsEB +
@@ -504,7 +520,6 @@ def buildEcalDQMSequences(process, options):
     
             process.ecalPedestalPath = cms.Path(
                 process.ecalPreRecoSequence +
-                process.ecalPedestalFilter +    
                 process.ecalRecoSequence +
                 process.ecalPedestalMonitorTask +
                 process.ecalPNDiodeMonitorTask
@@ -548,7 +563,6 @@ def buildEcalDQMSequences(process, options):
         elif calib:    
             process.ecalClientPath = cms.Path(
                 process.ecalPreRecoSequence +
-                process.ecalCalibrationFilter +
                 process.ecalCalibMonitorClient
             )
 
@@ -734,6 +748,7 @@ if __name__ == '__main__':
         commonOpts.add_option("-c", "--cfg-type", dest = "cfgType", default = "Physics", help = "CONFIG=(Physics|Calibration|Laser)", metavar = "CFGTYPE")
         commonOpts.add_option("-s", "--steps", dest = "steps", default = "sourceclient", help = "STEPS=[source][client]", metavar = "STEPS")
         commonOpts.add_option("-i", "--input-files", dest = "inputFiles", default = "", help = "source file name (comma separated) or URL", metavar = "SOURCE")
+        commonOpts.add_option("-I", "--input-list", dest = "inputList", default = "", help = "file containing list of sources", metavar = "FILE")
         commonOpts.add_option("-r", "--rawdata", dest = "rawDataCollection", default = "rawDataCollector", help = "collection name", metavar = "RAWDATA")
         commonOpts.add_option("-g", "--global-tag", dest = "globalTag", default = "auto:com10", help = "global tag", metavar = "TAG")
         commonOpts.add_option("-O", "--output-mode", type = "int", dest = "outputMode", default = 1, help = "0: no output, 1: DQM output, 2: EDM output", metavar = "MODE")
@@ -771,11 +786,10 @@ if __name__ == '__main__':
         options.MGPAGains = map(int, options.MGPAGains.split(','))
         options.MGPAGainsPN = map(int, options.MGPAGainsPN.split(','))
 
-#        process = cms.Process("DQM")
         generator = CfgGenerator('process')
 
         buildEcalDQMModules(generator, options)
-#        print generator._cmsObject.dumpPython()
+
         buildEcalDQMSequences(generator._cmsObject, options)
     
         # write cfg file
@@ -803,8 +817,16 @@ if __name__ == '__main__':
         
         cfgfile = file(fileName, "w")
     
-        cfgfile.write("### AUTO-GENERATED CMSRUN CONFIGURATION FOR ECAL DQM ###\n\n")
-        cfgfile.write("import FWCore.ParameterSet.Config as cms\n\n")
+        cfgfile.write("### AUTO-GENERATED CMSRUN CONFIGURATION FOR ECAL DQM ###\n")
+        if 'Live' not in options.environment:
+            cfgfile.write("""
+import FWCore.ParameterSet.Config as cms
+from FWCore.ParameterSet.VarParsing import VarParsing
+
+options = VarParsing('analysis')
+options.parseArguments()
+
+""")
 
         cfgfile.write(generator.generate())
     
@@ -859,6 +881,7 @@ if options.outputFile:
         options.register("environment", default = "LocalOffline", mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = "ENV=(CMSLive|PrivLive|PrivOffline|LocalLive|LocalOffline)")
         options.register("cfgType", default = "Physics", mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = "CONFIG=(Physics|Calibration|CalibrationStandalone|Laser)")
         options.register("steps", default = "sourceclient", mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = "DQM steps to perform")
+        options.register('inputList', default = '', mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = 'File containing list of input files')
         options.register("rawDataCollection", default = "rawDataCollector", mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = "collection name")
         options.register("globalTag", default = 'auto:com10', mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = "GlobalTag")
         options.register("outputMode", default = 1, mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.int, info = "0: no output, 1: DQM output, 2: EDM output")
