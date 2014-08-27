@@ -1,59 +1,105 @@
-import sys
 import os
 import time
 import subprocess
+import threading
 import re
 import traceback
 
-if os.path.dirname(os.path.abspath(__file__)) not in sys.path:
-    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
 from ecaldqmconfig import config
-from htmlnode import HTMLNode, wbmRunParameters
 from conddb import EcalCondDB
+from wbm import WBM
 from logger import Logger
 
-SETENV = 'export SCRAM_ARCH={scram_arch};cd {cmssw_base};eval `scram runtime -sh`;cd {workdir};'.format(scram_arch = config.scram_arch, cmssw_base = config.cmssw_base, workdir = config.workdir)
+class GlobalRunFileCopyDaemon(object):
+    # TEMPORARY SOLUTION (SEE BELOW)
+    def __init__(self, run, sourceNode, sourceDir, runInputDir):
+        self.run = run
+        self.targetDir = runInputDir + '/run%s' % run
+        self.sourceNode = sourceNode
+        self.sourceDir = sourceDir
+        self._stop = threading.Event()
+        self.files = []
 
-def onlineDQM(logFile_):
-    """
-    Monitor the online streams for ECAL data, and start the DQM job if a run is detected.
-    """
-    
-    monitorProcs = {}
-    for source in ['central', 'minidaq']:
-        monitorProcs[source] = subprocess.Popen(SETENV + 'cmsRun runcheck_cfg.py source={source}'.format(source = source), shell = True, stdout = subprocess.PIPE, stderr = subprocess.STDOUT)
-
-    logFile_.write('Waiting for a run.')
-    
-    while len(filter(lambda p : p.poll() is not None, monitorProcs.values())) == 0:
-        time.sleep(10)
-
-    run = '0'
-    for source, proc in monitorProcs.items():
         try:
-            if proc.poll() is None:
-                proc.terminate()
-                continue
-            
-            response = proc.stdout.readline()
-            logFile_.write('RunDetector for ' + source + ' says: ' + response)
-            matches = re.match('Found ECAL data in run ([0-9]+)', response.strip())
-            if not matches:
-                matches = re.match('Run ([0-9]+) does not contain ECAL data', response.strip())
-            if matches:
-                run = matches.group(1)
-
+            os.mkdir(self.targetDir)
         except OSError:
             pass
 
-    logFile_.write('Detected run ' + run + '.')
+        proc = subprocess.Popen(['ssh', self.sourceNode, '"ls %s/run%d"' % (self.sourceDir, self.run)], stdout = subprocess.PIPE, stderr = subprocess.STDOUT)
+        data = ''
+        while proc.poll() is None:
+            data += proc.communicate()[0]
+            time.sleep(2)
 
-    if run == '0': return (run, '', False)
+        try:
+            data += proc.communicate()[0]
+        except:
+            pass
 
-    wbmdata = wbmRunParameters(run)
+        if proc.poll() != 0:
+            return
 
-    if wbmdata['CMS.LVL0:ECAL'].lower() != 'in': return (run, '', False)
+        self.files = data.split()
+
+    def __del__(self):
+        self._stop.set()
+
+    def copy(self, startLumi):
+        jsonFiles = filter(lambda name: name.endswith('.jsn'), self.files)
+
+        lumis = map(lambda name: int(re.match('run%d_ls([0-9]+)' % self.run, name).group(1)), jsonFiles)
+        lumis = sorted(list(set(lumis)))
+
+        for lumi in lumis:
+            if lumi < startLumi: continue
+
+            proc = subprocess.Popen(['scp', '%s:%s/run%d/run%d_ls%04d_*' % (self.sourceNode, self.sourceDir, self.run, self.run, lumi), self.targetDir])
+            try:
+                while proc.poll() is None:
+                    time.sleep(2)
+
+            except KeyboardInterrupt:
+                proc.terminate()
+                while proc.poll() is None:
+                    time.sleep(1)
+                    
+                raise
+
+        if lumis[0] == 0:
+            #EOR
+            return 0
+
+        return lumis[-1]
+
+    def start(self):
+        lumi = 1
+        while True:
+            lumi = self.copy(lumi)
+            if lumi == 0:
+                break
+
+            if self._stop.isSet():
+                break
+
+            break
+
+            time.sleep(25)
+
+    def stop(self):
+        self._stop.set()
+
+
+def onlineDQM(logFile_, run_, wbm_):
+    """
+    Monitor the online streams for ECAL data, and start the DQM job if a run is detected.
+    """
+
+    logFile_.write('Processing run', run_)
+
+    wbmdata = wbm_.getRunParameters(run_)
+
+    ecalIn = wbmdata['CMS.LVL0:ECAL'].lower() == 'in'
+    esIn = wbmdata['CMS.LVL0:ES'].lower() == 'in'
 
     try:
         dqmRunKey = wbmdata['CMS.LVL0:DQM_RUN_KEY_AT_CONFIGURE'].lower()
@@ -61,80 +107,160 @@ def onlineDQM(logFile_):
         dqmRunKey = ''
 
     if dqmRunKey == 'cosmic_run':
-        workflowBase = '/Cosmics'
+        workflowBase = 'Cosmics'
     elif dqmRunKey == 'pp_run':
-        workflowBase = '/Protons'
+        workflowBase = 'Protons'
     elif dqmRunKey == 'hi_run':
-        workflowBase = '/HeavyIons'
+        workflowBase = 'HeavyIons'
     else:
-        workflowBase = '/All'
+        workflowBase = 'All'
 
     matches = re.match('/global_configuration_map/cms/(central|minidaq)/', wbmdata['CMS.LVL0:GLOBAL_CONF_KEY'].lower())
 
-    logFile_.write('Found entries in WBM.\n  ECAL:' + wbmdata['CMS.LVL0:ECAL'] + '\n  CONFKEY: ' + wbmdata['CMS.LVL0:GLOBAL_CONF_KEY'])
+    logFile_.write('Found entries in WBM.\n CONFKEY: ' + wbmdata['CMS.LVL0:GLOBAL_CONF_KEY'])
 
-    if not matches: return (run, '', False)
+    if not matches:
+        return ''
 
     daq = matches.group(1)
 
-    jobOptions = {}
-    commonOptions = 'globalTag=GR_H_V32::All verbosity=1 outputPath=/data/ecalod-disk01/dqm-data/tmp'
+    logFile_.write('DAQ type: ', daq)
+
+    procs = {}
     if daq == 'central':
-        commonOptions += ' inputFiles=http://dqm-c2d07-30.cms:22100/urn:xdaq-application:lid=30'
-        jobOptions['A'] = commonOptions + ' environment=PrivLive cfgType=Physics workflow=' + workflowBase + '/' + config.period + '/CentralDAQ'
-        jobOptions['Calibration'] = commonOptions + ' environment=PrivLive cfgType=Calibration workflow=' + workflowBase + '/' + config.period + '/CentralDAQ'
+        copyDaemon = GlobalRunFileCopyDaemon(run_, 'fu-c2f13-39-01', '/fff/BU0/ramdisk', '/tmp/onlineDQM')
+        if len(copyDaemon.files) == 0:
+            logFile_.write('Source directory empty')
+            return ''
+
+        commonOptions = 'runNumber=%d runInputDir=%s' % (run_, '/tmp/onlineDQM')
+
+        config.var.workflow = '/{dataset}/{period}/CentralDAQ'.format(dataset = workflowBase, period = config.period)
+
+        if ecalIn:
+            ecalOptions = 'environment=PrivLive workflow={workflow} outputPath={outputPath}'.format(workflow = config.var.workflow, outputPath = config.tmpoutdir)
+
+            log = open(config.logdir + '/ecal_dqm_sourceclient-privlive_cfg.log', 'a')
+            command = 'source $HOME/DQM/cmssw.sh; exec cmsRun {conf} {common} {ecal} {spec}'.format(conf = config.workdir + '/ecalConfigBuilder.py', common = commonOptions, ecal = ecalOptions, spec = 'cfgType=Physics')
+            proc = subprocess.Popen(command, shell = True, stdout = log, stderr = subprocess.STDOUT)
+            logFile_.write(command)
+            procs['Physics'] = (proc, log, int(time.time()))
+    
+            log = open(config.logdir + '/ecalcalib_dqm_sourceclient-privlive_cfg.log', 'a')
+            command = 'source $HOME/DQM/cmssw.sh; exec cmsRun {conf} {common} {ecal} {spec}'.format(conf = config.workdir + '/ecalConfigBuilder.py', common = commonOptions, ecal = ecalOptions, spec = 'cfgType=Calibration')
+            proc = subprocess.Popen(command, shell = True, stdout = log, stderr = subprocess.STDOUT)
+            logFile_.write(command)
+            procs['Calibration'] = (proc, log, int(time.time()))
+
+        if esIn:
+            log = open(config.logdir + '/es_dqm_sourceclient-privlive_cfg.log', 'a')
+            command = 'source $HOME/DQM/cmssw.sh; exec cmsRun {conf} {common}'.format(conf = config.workdir + '/es_dqm_sourceclient-privlive_cfg.py', common = commonOptions)
+            proc = subprocess.Popen(command, shell = True, stdout = log, stderr = subprocess.STDOUT)
+            logFile_.write(command)
+            procs['ES'] = (proc, log, int(time.time()))
+
         generalTag = 'PHYSICS'
+
+        logFile_.write('Starting file copy daemon')
+        copyThread = threading.Thread(target = GlobalRunFileCopyDaemon.start, args = (copyDaemon,))
+        copyThread.start()
+
     elif daq == 'minidaq':
-        jobOptions['Calibration'] = commonOptions + ' inputFiles=http://cmsdisk1.cms:15100/urn:xdaq-application:lid=50 environment=PrivLive cfgType=CalibrationStandalone workflow=' + workflowBase + '/' + config.period + '/MiniDAQ rawDataCollection=hltEcalCalibrationRaw'
+        if not os.path.isdir('/dqmminidaq/run%d' % run_):
+            logFile_.write('DQM stream was not produced')
+            return ''
+
+        config.var.workflow = '/{dataset}/{period}/CentralDAQ'.format(dataset = workflowBase, period = config.period)
+
+        commonOptions = 'runNumber=%d runInputDir=%s' % (run_, '/dqmminidaq')
+
+        if ecalIn:
+            ecalOptions = 'environment=PrivLive workflow={workflow} outputPath={outputPath}'.format(workflow = config.var.workflow, outputPath = config.tmpoutdir)
+            
+            log = open(config.logdir + '/ecalcalib_dqm_sourceclient-privlive_cfg.log', 'a')
+            command = 'source $HOME/DQM/cmssw.sh; exec cmsRun {conf} {common} {ecal} {spec}'.format(conf = config.workdir + '/ecalConfigBuilder.py', common = commonOptions, ecal = ecalOptions, spec = 'cfgType=CalibrationStandalone')
+            proc = subprocess.Popen(command, shell = True, stdout = log, stderr = subprocess.STDOUT)
+            logFile_.write(command)
+            procs['Calibration'] = (proc, log, int(time.time()))
+
+        if esIn:
+            log = open(config.logdir + '/es_dqm_sourceclient-privlive_cfg.log', 'a')
+            command = 'source $HOME/DQM/cmssw.sh; exec cmsRun {conf} {common}'.format(conf = config.workdir + '/es_dqm_sourceclient-privlive_cfg.py', common = commonOptions)
+            proc = subprocess.Popen(command, shell = True, stdout = log, stderr = subprocess.STDOUT)
+            logFile_.write(command)
+            procs['ES'] = (proc, log, int(time.time()))
+
         generalTag = 'GLOBAL'
 
-    logFile_.write('Start CMSSW jobs.')
+    logFile_.write('Running configurations:', sorted(procs.keys()))
 
-    runProcs = []
-    for stream, jobOption in jobOptions.items():
-        logName = config.logdir + '/online_' + daq + '_' + stream + '.log'
-        try:
-            os.rename(logName, logName + '.old')
-        except OSError:
-            pass
+    while len(filter(lambda x : x[0].poll() is None, procs.values())) != 0:
+        if daq == 'minidaq':
+            wbmdata = wbm_.getRunParameters(run_)
+            if 'CMS.LVL0:STOP_TIME_T' in wbmdata:
+                stopTime = time.mktime(time.strptime(wbmdata['CMS.LVL0:STOP_TIME_T'].replace(' UTC', ''), '%m/%d/%y %I:%M:%S %p')) + time.timezone
+                if stopTime < time.time():
+                    open('/dqmminidaq/run{run}/run{run}_ls0000_EoR.jsn'.format(run = run_), 'w').close()
 
-        runProcs.append(subprocess.Popen(SETENV + 'cmsRun ecalConfigBuilder.py maxEvents=100 ' + jobOption, shell = True, stdout = open(logName, 'a'), stderr = subprocess.STDOUT))
+        time.sleep(10)
 
-    while len(filter(lambda p : p.poll() is None, runProcs)) != 0:
-        time.sleep(60)
+    for proc, log, start in procs.values():
+        log.close()
 
-    result = len(filter(lambda p : p.returncode != 0, runProcs)) == 0
+    if daq == 'central':
+        copyThread.join()
+        pass
 
-    return (run, generalTag, result)
+    success = len(filter(lambda x : x[0].returncode != 0, procs.values())) == 0
+
+    if success:
+        return generalTag
+    else:
+        return ''
 
 
 if __name__ == '__main__':
+
+    import sys
+    from optparse import OptionParser
+
+    parser = OptionParser(usage = 'Usage: onlineDQM.py [options] startRun')
+
+    (options, args) = parser.parse_args()
+
+    try:
+        firstRun = int(args[0])
+    except:
+        parser.print_usage()
+        sys.exit(1)
 
     try:
         os.rename(config.logdir + '/onlineDQM.log', config.logdir + '/onlineDQM.log.old')
     except OSError:
         pass
 
-    db = EcalCondDB(config.dbwrite.name, config.dbwrite.user, config.dbwrite.password)
-
     logFile = Logger(config.logdir + '/onlineDQM.log')
+    logFile.write('ECAL Online DQM')
 
-    currentRun = 220000
+    db = EcalCondDB(config.dbwrite.dbName, config.dbwrite.dbUserName, config.dbwrite.dbPassword)
+    wbm = WBM()
+
+    currentRun = firstRun
 
     while True:
         try:
-            if db.getNewRunNumber(currentRun) == 0:
-                time.sleep(60)
-                continue
+            newRun = 0
+            while newRun == 0:
+                newRun, ecalIn, esIn = wbm.findNewRun(currentRun)
+                time.sleep(20)
 
-            run, generalTag, success = onlineDQM(logFile)
+            currentRun = newRun
 
-            if run != '0':
-                currentRun = int(run)
+            generalTag = onlineDQM(logFile, currentRun, wbm)
 
-            if success:
+            if generalTag:
                 logFile.write('CMSSW job successfully returned. Start DB writing.')
-                db.setMonRunOutcome(run, 'dqmdone')
+                db.setMonRunOutcome(currentRun, 'dqmdone')
 
                 # now write DQM results to DB using CMSSW
                 inputFiles = ''
@@ -142,13 +268,17 @@ if __name__ == '__main__':
                     if '%09d' % int(run) in fileName:
                         inputFiles += ' inputFiles=' + config.tmpoutdir + '/' + fileName
 
-                proc = subprocess.Popen(SETENV + 'cmsRun writeDB_cfg.py' + inputFiles, shell = True, stdout = open(config.logdir + '/dbwrite.log', 'a'), stderr = subprocess.STDOUT)
+                command = 'source $HOME/DQM/cmssw.sh; exec cmsRun {conf} {inputFiles}'.format(conf = config.workdir + '/writeDB_cfg.py', inputFiles = inputFiles)
+                log = open(config.logdir + '/dbwrite.log', 'a')
+                proc = subprocess.Popen(command, shell = True, stdout = log, stderr = subprocess.STDOUT)
 
                 while proc.poll() is None:
                     time.sleep(10)
 
+                log.close()
+
                 # outcome is set to success automatically in the CMSSW job upon completion
-            elif generalTag:
+            else:
                 logFile.write('CMSSW job failed.')
                 db.setMonRunOutcome(run, 'dqmfail')
 
@@ -164,3 +294,4 @@ if __name__ == '__main__':
     logFile.close()
 
     db.close()
+    wbm.close()

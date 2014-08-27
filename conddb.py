@@ -7,12 +7,12 @@ class EcalCondDB(object):
 
     class DBRow(object):
         def __init__(self, descriptions_, row_):
+            self.values = {}
             if row_ is None:
-                self.empty = True
                 return
 
-            self.empty = False
             for iC in range(len(row_)):
+                self.values[descriptions_[iC][0]] = row_[iC]
                 setattr(self, descriptions_[iC][0], row_[iC])
 
 
@@ -28,7 +28,16 @@ class EcalCondDB(object):
         self._cur.execute(query_, **kwargs)
         return EcalCondDB.DBRow(self._cur.description, self._cur.fetchone())
 
-    def getNewRunNumber(self, minRun_, location_ = 'P5_Co'):
+    def getAllRows(self, query_, **kwargs):
+        self._cur.execute(query_, **kwargs)
+        rows = []
+        row = self._cur.fetchone()
+        while row:
+            rows.append(EcalCondDB.DBRow(self._cur.description, row))
+            row = self._cur.fetchone()
+        return rows
+
+    def getNewRunNumber(self, minRun_ = 0, location_ = 'P5_Co'):
         row = self.getOneRow('\
         SELECT RUN_NUM FROM\
         RUN_IOV\
@@ -42,7 +51,7 @@ class EcalCondDB(object):
         )',
         run = minRun_, loc = location_)
 
-        if row.empty:
+        if len(row.values) == 0:
             return 0
         else:
             return row.RUN_NUM
@@ -65,7 +74,7 @@ class EcalCondDB(object):
     def insertMonRunIOV(self, runIOV_):
         # these parameters are variable in principle but fixed in practice
         monRunTag = self.getOneRow('SELECT * FROM MON_RUN_TAG WHERE GEN_TAG LIKE \'CMSSW-offline-private\' AND MON_VER_ID = 1')
-        if monRunTag.empty:
+        if len(monRunTag.values) == 0:
             raise RuntimeError("MonRun tag not found in DB")
             
         self._cur.execute('INSERT INTO MON_RUN_IOV (IOV_ID, TAG_ID, RUN_IOV_ID, SUBRUN_NUM, SUBRUN_START, SUBRUN_END)\
@@ -79,7 +88,7 @@ class EcalCondDB(object):
     def setMonRunOutcome(self, run_, outcome_, location_ = 'P5_Co'):
         # get the outcome definition
         outcomeDef = self.getOneRow('SELECT * FROM MON_RUN_OUTCOME_DEF WHERE SHORT_DESC LIKE :sd', sd = outcome_)
-        if outcomeDef.empty:
+        if len(outcomeDef.values) == 0:
             raise RuntimeError("Outcome " + outcome_ + " not defined")
         
         # get the DAQ RunIOV for the given run
@@ -90,7 +99,7 @@ class EcalCondDB(object):
         # get the DQM RunIOV for the given run (subrun is fixed to 1)
         monRunIOV = self.getMonRunIOV(runIOV)
         
-        if monRunIOV.empty:
+        if len(monRunIOV.values) == 0:
             # need to create a new DQM RunIOV
             self.insertMonRunIOV(runIOV)
             monRunIOV = self.getMonRunIOV(runIOV)
@@ -101,7 +110,7 @@ class EcalCondDB(object):
         #  Even after the EB and EE DQM were merged, we kept writing two entries per run until 2014. The two rows were complete duplicate of each other.
         #  Since April 2014 we are back to writing only one entry per run with LOGIC_ID = 1.
         monRunDat = self.getOneRow('SELECT * FROM MON_RUN_DAT WHERE IOV_ID = :id', id = monRunIOV.IOV_ID)
-        if monRunDat.empty:
+        if len(monRunDat.values) == 0:
             self._cur.execute('INSERT INTO MON_RUN_DAT (IOV_ID, LOGIC_ID) VALUES (:id, 1)', monRunIOV.IOV_ID)
 
         elif monRunDat.RUN_OUTCOME_ID != outcomeDef.DEF_ID:
@@ -110,23 +119,13 @@ class EcalCondDB(object):
         
 if __name__ == '__main__': # FOR DEBUGGING
 
-    import sys
-    import os
-
-    if os.path.dirname(os.path.abspath(__file__)) not in sys.path:
-        sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
     from ecaldqmconfig import config
 
-    db = EcalCondDB(config.dbread.name, config.dbread.user, config.dbread.password)
+    db = EcalCondDB(config.dbread.dbName, config.dbread.dbUserName, config.dbread.dbPassword)
 
-    newRun = db.getNewRunNumber(200000)
-    print 'New run > 200000', newRun
-    if newRun != 0:
-        iov = db.getRunIOV(newRun)
-        if not iov.empty:
-            print 'IOV:', iov.IOV_ID
-            moniov = db.getMonRunIOV(iov)
-            if not moniov.empty:
-                print 'MonIOV:', moniov.IOV_ID
-    
+    newRun = db.getNewRunNumber()
+    print 'New run', newRun
+
+    oneRun = db.getRunIOV(225150)
+    for key, value in oneRun.values.items():
+        print key, value

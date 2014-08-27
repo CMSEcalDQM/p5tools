@@ -1,42 +1,37 @@
 class ConfigNode:
-    pass
+    def __init__(self):
+        pass
+
+    def readFile(self, path):
+        conf = {}
+        with open('/nfshome0/ecalpro/DQM/.ecal_db_test.conf', 'r') as confFile:
+            for line in confFile:
+                # read lines that are in format
+                # key = value
+                try:
+                    conf[line.strip().split()[0]] = line.strip().split()[2]
+                except:
+                    pass
+
+            for key, value in conf.items():
+                setattr(self, key, value)
+
 
 config = ConfigNode()
 
 config.workdir = '/nfshome0/ecalpro/DQM/p5tools'
-
-config.wbm = ConfigNode()
-config.wbm.host = 'cmswbm2.cms'
-config.wbm.app = '/cmsdb/servlet/RunParameters'
 
 config.period = 'Run2014'
 
 config.logdir = '/data/ecalod-disk01/dqm-data/logs'
 config.tmpoutdir = '/data/ecalod-disk01/dqm-data/tmp'
 
-config.scram_arch = 'slc5_amd64_gcc462'
-config.cmssw_base = '/data/ecalod-disk01/dqm-data/CMSSW_5_2_4_patch4'
-
 config.dbwrite = ConfigNode()
-conf = {}
-confFile = open('/nfshome0/ecalpro/DQM/.ecal_db_read.conf', 'r')
-for line in confFile:
-    # lines are in format
-    # key = value
-    conf[line.strip().split()[0]] = line.strip().split()[2]
-confFile.close()
-
-config.dbwrite.name = conf['dbName']
-config.dbwrite.user = conf['dbUserName']
-config.dbwrite.password = conf['dbPassword']
+config.dbwrite.readFile('/nfshome0/ecalpro/DQM/.ecal_db_test.conf')
 
 config.dbread = ConfigNode()
-conf = {}
-confFile = open('/nfshome0/ecalpro/DQM/.ecal_db_read.conf', 'r')
-for line in confFile:
-    conf[line.strip().split()[0]] = line.strip().split()[2]
-confFile.close()
+config.dbread.readFile('/nfshome0/ecalpro/DQM/.ecal_db_read.conf')
 
-config.dbread.name = conf['dbName']
-config.dbread.user = conf['dbUserName']
-config.dbread.password = conf['dbPassword']
+# utility node to pass around parameters among moduels
+config.var = ConfigNode()
+config.var.workflow = ''

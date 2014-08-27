@@ -357,13 +357,8 @@ def buildEcalDQMModules(process, options):
     ### SOURCE ###
     
     if live:
-        process.emptyload("DQM.Integration.test.inputsource_cfi")  # input source uses VarParsing (Jul 2 2014)
-
-#        if options.rawDataCollection == 'hltEcalCalibrationRaw':
-#            process.source.SelectHLTOutput = 'hltOutputCalibration'
-#            process.source.SelectEvents = cms.untracked.PSet(SelectEvents = cms.vstring("HLT_EcalCalibration_v*"))
-#        else:
-#            process.source.SelectHLTOutput = 'hltOutputA'
+        process.loadFile("DQM.Integration.test.inputsource_cfi")  # input source uses VarParsing (Jul 2 2014)
+        process.addLine('process.source.endOfRunKills = False')
 
     else:
         if '.dat' in options.inputFiles[0]:
@@ -664,13 +659,17 @@ if __name__ == '__main__':
             def __init__(self, name):
                 CustomDefAttr.__init__(self, name, cms.Process('DQM'))
                 self._loadPaths = []
+                self._lines = []
 
             def load(self, path):
                 self._cmsObject.load(path)
                 self._loadPaths.append(path)
 
-            def emptyload(self, path):
+            def loadFile(self, path):
                 self._loadPaths.append(path)
+
+            def addLine(self, line):
+                self._lines.append(line.strip())
 
             def generate(self):
                 output = 'process = cms.Process("' + self._name + '")\n\n'
@@ -713,6 +712,11 @@ if __name__ == '__main__':
                     output += 'process.' + name + ' = ' + seq.dumpPython(cms.PrintOptions())
 
                 output += '\n'
+
+                if len(self._lines):
+                    output += '### Customizations ###\n\n'
+                    for line in self._lines:
+                        output += line + '\n'
 
                 output += '### Paths ###\n\n'
 
@@ -907,6 +911,12 @@ if options.outputFile:
         options.parseArguments()
 
         process = cms.Process("DQM")
+
+        def executeLine(line):
+            exec(line.strip())
+
+        process.loadFile = process.load
+        process.addLine = executeLine
 
         buildEcalDQMModules(process, options)
         buildEcalDQMSequences(process, options)
