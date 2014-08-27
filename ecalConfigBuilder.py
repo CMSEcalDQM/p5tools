@@ -317,8 +317,6 @@ def buildEcalDQMModules(process, options):
 
     if p5:
         process.load('DQM.Integration.test.FrontierCondition_GT_cfi')
-        # temporary hack until squid is installed on ecalod-dqm (Aug 25 2014 yiiyama)
-        process.GlobalTag.pfnPrefix = cms.untracked.string("frontier://(proxyurl=http://frontier.cms:3128)(serverurl=http://frontier.cms:8000/FrontierOnProd)(serverurl=http://frontier.cms:8000/FrontierOnProd)(retrieve-ziplevel=0)(failovertoserver=no)/")
     else:
         process.load("Configuration.StandardSequences.FrontierConditions_GlobalTag_cff")
         if options.globalTag.startswith('auto:'):
@@ -328,17 +326,19 @@ def buildEcalDQMModules(process, options):
             process.GlobalTag.globaltag = options.globalTag
 
         process.globalTagPrefer = cms.ESPrefer('PoolDBESSource', 'GlobalTag')
+
+    connect = process.GlobalTag.connect.value()
    
     process.GlobalTag.toGet = cms.VPSet(
         cms.PSet(
             record = cms.string("EcalDQMChannelStatusRcd"),
             tag = cms.string("EcalDQMChannelStatus_v1_hlt"),
-            connect = cms.untracked.string(process.GlobalTag.connect.value().replace('CMS_COND_31X_GLOBALTAG', 'CMS_COND_34X_ECAL'))
+            connect = cms.untracked.string(connect.replace('CMS_COND_31X_GLOBALTAG', 'CMS_COND_34X_ECAL'))
         ),
         cms.PSet(
             record = cms.string("EcalDQMTowerStatusRcd"),
             tag = cms.string("EcalDQMTowerStatus_v1_hlt"),
-            connect = cms.untracked.string(process.GlobalTag.connect.value().replace('CMS_COND_31X_GLOBALTAG', 'CMS_COND_34X_ECAL'))
+            connect = cms.untracked.string(connect.replace('CMS_COND_31X_GLOBALTAG', 'CMS_COND_34X_ECAL'))
         )
     )
 
