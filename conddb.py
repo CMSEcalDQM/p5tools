@@ -1,8 +1,9 @@
+import re
 import cx_Oracle
 
-class EcalCondDB(object):
+class CondDB(object):
     """
-    Oracle wrapper with interfaces to ECALDQM-specific functions.
+    Simple oracle wrapper with interfaces to ECALDQM-specific functions.
     """
 
     class DBRow(object):
@@ -25,17 +26,30 @@ class EcalCondDB(object):
         self._conn.close()
 
     def getOneRow(self, query_, **kwargs):
-        self._cur.execute(query_, **kwargs)
-        return EcalCondDB.DBRow(self._cur.description, self._cur.fetchone())
+        try:
+            self._cur.execute(query_, **kwargs)
+        except cx_Oracle.DatabaseError:
+            return CondDB.DBRow(None, None)
+
+        return CondDB.DBRow(self._cur.description, self._cur.fetchone())
 
     def getAllRows(self, query_, **kwargs):
         self._cur.execute(query_, **kwargs)
         rows = []
         row = self._cur.fetchone()
         while row:
-            rows.append(EcalCondDB.DBRow(self._cur.description, row))
+            rows.append(CondDB.DBRow(self._cur.description, row))
             row = self._cur.fetchone()
         return rows
+
+
+class EcalCondDB(CondDB):
+    """
+    Oracle wrapper with interfaces to ECALDQM-specific functions.
+    """
+
+    def __init__(self, dbName_, user_, password_):
+        CondDB.__init__(self, dbName_, user_, password_)
 
     def getNewRunNumber(self, minRun_ = 0, location_ = 'P5_Co'):
         row = self.getOneRow('\
@@ -116,16 +130,42 @@ class EcalCondDB(object):
         elif monRunDat.RUN_OUTCOME_ID != outcomeDef.DEF_ID:
             self._cur.execute('UPDATE MON_RUN_DAT SET RUN_OUTCOME_ID = :outcome WHERE IOV_ID = :iov', outcome = outcomeDef.DEF_ID, iov = monRunIOV.IOV_ID)
 
+
+class RunParameterDB(CondDB):
+    """
+    Oracle wrapper with interfaces to WBM-specific functions.
+    """
+
+    def __init__(self, dbName_, user_, password_):
+        CondDB.__init__(self, dbName_, user_, password_)
+
+    def getRunParameter(self, run, paramName):
+        row = self.getOneRow('\
+        SELECT STRING_VALUE FROM\
+        CMS_RUNINFO.RUNSESSION_PARAMETER\
+        WHERE\
+        RUNNUMBER = :run\
+        AND NAME LIKE :name\
+        ',
+        run = run, name = paramName)
+
+        if len(row.values) == 0:
+            return ''
+        else:
+            return row.STRING_VALUE
+
+    def getDAQType(self, run):
+        matches = re.match('/global_configuration_map/cms/(central|minidaq)/', self.getRunParameter(run, 'CMS.LVL0:GLOBAL_CONF_KEY').lower())
+        if matches:
+            return matches.group(1)
+        else:
+            return ''
+        
         
 if __name__ == '__main__': # FOR DEBUGGING
 
     from ecaldqmconfig import config
 
-    db = EcalCondDB(config.dbread.dbName, config.dbread.dbUserName, config.dbread.dbPassword)
+    db = RunParameterDB(config.dbread.dbName, config.dbread.dbUserName, config.dbread.dbPassword)
 
-    newRun = db.getNewRunNumber()
-    print 'New run', newRun
-
-    oneRun = db.getRunIOV(225150)
-    for key, value in oneRun.values.items():
-        print key, value
+    print db.getRunParameter(225680, 'CMS.LVL0:ECAL')

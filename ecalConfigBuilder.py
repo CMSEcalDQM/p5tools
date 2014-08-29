@@ -343,22 +343,26 @@ def buildEcalDQMModules(process, options):
     )
 
     process.MessageLogger = cms.Service("MessageLogger",
+        destinations = cms.untracked.vstring('cerr'),
+        categories = cms.untracked.vstring('EcalDQM', 'fileAction'),
         cerr = cms.untracked.PSet(
             threshold = cms.untracked.string("WARNING"),
             noLineBreaks = cms.untracked.bool(True),
             noTimeStamps = cms.untracked.bool(True),
             default = cms.untracked.PSet(
                 limit = cms.untracked.int32(-1)
+            ),
+            fileAction = cms.untracked.PSet(
+                limit = cms.untracked.int32(10)
             )
-        ),
-        destinations = cms.untracked.vstring("cerr")
+        )
     )
 
     ### SOURCE ###
     
     if live:
-        process.loadFile("DQM.Integration.test.inputsource_cfi")  # input source uses VarParsing (Jul 2 2014)
-        process.addLine('process.source.endOfRunKills = False')
+        process.load("DQM.Integration.test.inputsource_cfi")  # input source uses VarParsing (Jul 2 2014)
+        process.source.endOfRunKills = False
 
     else:
         if '.dat' in options.inputFiles[0]:
@@ -494,7 +498,7 @@ def buildEcalDQMSequences(process, options):
             )
 
             if live:
-                process.ecalLaserLedPath.insert(1, process.ecalLaserLedFilter)
+#                process.ecalLaserLedPath.insert(1, process.ecalLaserLedFilter)
                 process.ecalLaserLedPath.insert(0, process.preScaler)
 
             paths.append(process.ecalLaserLedPath)
@@ -508,7 +512,7 @@ def buildEcalDQMSequences(process, options):
             )
 
             if live:
-                process.ecalTestPulsePath.insert(1, process.ecalTestPulseFilter)
+#                process.ecalTestPulsePath.insert(1, process.ecalTestPulseFilter)
                 process.ecalTestPulsePath.insert(0, process.preScaler)
 
             paths.append(process.ecalTestPulsePath)
@@ -521,7 +525,7 @@ def buildEcalDQMSequences(process, options):
             )
 
             if live:
-                process.ecalPedestalPath.insert(1, process.ecalPedestalFilter)
+#                process.ecalPedestalPath.insert(1, process.ecalPedestalFilter)
                 process.ecalPedestalPath.insert(0, process.preScaler)
 
             paths.append(process.ecalPedestalPath)
@@ -546,7 +550,7 @@ def buildEcalDQMSequences(process, options):
             )
 
             if live:
-                process.ecalClientPath.insert(1, process.ecalPhysicsFilter)
+#                process.ecalClientPath.insert(1, process.ecalPhysicsFilter)
                 process.ecalClientPath.insert(0, process.preScaler)
 
             paths.append(process.ecalClientPath)
@@ -562,7 +566,7 @@ def buildEcalDQMSequences(process, options):
             )
 
             if live:
-                process.ecalClientPath.insert(1, process.ecalCalibrationFilter)
+#                process.ecalClientPath.insert(1, process.ecalCalibrationFilter)
                 process.ecalClientPath.insert(0, process.preScaler)
 
             paths.append(process.ecalClientPath)
@@ -665,11 +669,11 @@ if __name__ == '__main__':
                 self._cmsObject.load(path)
                 self._loadPaths.append(path)
 
-            def loadFile(self, path):
-                self._loadPaths.append(path)
-
-            def addLine(self, line):
-                self._lines.append(line.strip())
+#            def loadFile(self, path):
+#                self._loadPaths.append(path)
+#
+#            def addLine(self, line):
+#                self._lines.append(line.strip())
 
             def generate(self):
                 output = 'process = cms.Process("' + self._name + '")\n\n'
@@ -777,6 +781,8 @@ if __name__ == '__main__':
         optparser.add_option_group(writeOpts)
         
         (options, args) = optparser.parse_args()
+
+        sys.argv = sys.argv[:1]
     
         options.inputFiles = options.inputFiles.split(',')
         if not options.inputFiles[0]:
@@ -876,6 +882,14 @@ if options.outputFile:
         cfgfile.close()
     
     else:
+        onlineSourceArgs = []
+        for arg in sys.argv[2:]:
+            if 'runNumber=' in arg or 'runInputDir' in arg or 'skipFirstLumi' in arg or 'runtype' in arg or 'runkey' in arg:
+                onlineSourceArgs.append(arg)
+
+        for arg in onlineSourceArgs:
+            sys.argv.remove(arg)
+
         from FWCore.ParameterSet.VarParsing import VarParsing
     
         options = VarParsing("analysis")
@@ -910,13 +924,15 @@ if options.outputFile:
     
         options.parseArguments()
 
+        sys.argv = sys.argv[:2]
+        sys.argv += onlineSourceArgs
+
+        print sys.argv
+
         process = cms.Process("DQM")
 
         def executeLine(line):
             exec(line.strip())
-
-        process.loadFile = process.load
-        process.addLine = executeLine
 
         buildEcalDQMModules(process, options)
         buildEcalDQMSequences(process, options)

@@ -27,8 +27,6 @@ class WBM(object):
             return self._conn.getresponse()
 
     def getRunParameters(self, run, keys = []):
-        if len(keys):
-            for key in keys:
         try:
             self._conn.request("GET", '/cmsdb/servlet/RunParameters?RUN=' + str(run))
             response = self._conn.getresponse()
@@ -41,11 +39,11 @@ class WBM(object):
         rows = HTMLNode(html = response.read()).findDaughtersByTag('tr')
         data = {}
         for row in rows:
-            key = row.daughters[0].daughters[0].generateHTML()
+            key = row.daughters[0].daughters[0].generateHTML().strip()
     
             if len(keys) and key not in keys: continue
     
-            value = row.daughters[1].daughters[0].generateHTML()
+            value = row.daughters[1].daughters[0].generateHTML().strip()
                 
             data[key] = value
     
@@ -129,7 +127,7 @@ if __name__ == '__main__':
 
     wbm = WBM()
 
-    runParams = wbm.getRunParameters(225487, keys)
+    runParams = wbm.getRunParameters(225673, keys)
     for key, value in runParams.items():
         print key, value
 

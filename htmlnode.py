@@ -23,8 +23,6 @@ class HTMLNode(object):
                     self.daughters.append(node)
 
         elif html:
-            print 'html given:', html
-
             matches = re.match('<\\s*(\\w+)([^>]*)>', html, re.MULTILINE)
 
             if matches:

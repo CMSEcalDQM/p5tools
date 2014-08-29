@@ -4,7 +4,7 @@ class ConfigNode:
 
     def readFile(self, path):
         conf = {}
-        with open('/nfshome0/ecalpro/DQM/.ecal_db_test.conf', 'r') as confFile:
+        with open(path, 'r') as confFile:
             for line in confFile:
                 # read lines that are in format
                 # key = value
@@ -32,6 +32,3 @@ config.dbwrite.readFile('/nfshome0/ecalpro/DQM/.ecal_db_test.conf')
 config.dbread = ConfigNode()
 config.dbread.readFile('/nfshome0/ecalpro/DQM/.ecal_db_read.conf')
 
-# utility node to pass around parameters among moduels
-config.var = ConfigNode()
-config.var.workflow = ''

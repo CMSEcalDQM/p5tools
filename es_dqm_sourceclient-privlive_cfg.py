@@ -1,12 +1,49 @@
+import sys
+
 import FWCore.ParameterSet.Config as cms
+from FWCore.ParameterSet.VarParsing import VarParsing
 
 from ecaldqmconfig import config
 
+onlineSourceArgs = []
+for arg in sys.argv[2:]:
+    if 'runNumber=' in arg or 'runInputDir' in arg or 'skipFirstLumi' in arg or 'runtype' in arg or 'runkey' in arg:
+        onlineSourceArgs.append(arg)
+
+for arg in onlineSourceArgs:
+    sys.argv.remove(arg)
+
+options = VarParsing("analysis")
+options._tags.pop('numEvent%d')
+options._tagOrder.remove('numEvent%d')
+
+options.register("workflow", default = "", mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = "offline workflow")
+
+options.parseArguments()
+
+sys.argv = sys.argv[:2]
+sys.argv += onlineSourceArgs
+
 process = cms.Process("ESDQM")
 
-process.load('Configuration/StandardSequences/Services_cff')
-process.load('FWCore/MessageService/MessageLogger_cfi')
+#process.load('Configuration.StandardSequences.Services_cff')
 process.load("FWCore.Modules.preScaler_cfi")
+
+process.MessageLogger = cms.Service("MessageLogger",
+    destinations = cms.untracked.vstring('cerr'),
+    categories = cms.untracked.vstring('EcalDQM', 'fileAction'),
+    cerr = cms.untracked.PSet(
+        threshold = cms.untracked.string("WARNING"),
+        noLineBreaks = cms.untracked.bool(True),
+        noTimeStamps = cms.untracked.bool(True),
+        default = cms.untracked.PSet(
+            limit = cms.untracked.int32(-1)
+        ),
+        fileAction = cms.untracked.PSet(
+            limit = cms.untracked.int32(10)
+        )
+    )
+)
 
 # for live online DQM in P5
 process.load("DQM.Integration.test.inputsource_cfi")
@@ -25,7 +62,7 @@ process.load("EventFilter.ESRawToDigi.esRawToDigi_cfi")
 process.esRawToDigi.sourceTag = 'source'
 process.esRawToDigi.debugMode = False
 
-process.load('RecoLocalCalo/EcalRecProducers/ecalPreshowerRecHit_cfi')
+process.load('RecoLocalCalo.EcalRecProducers.ecalPreshowerRecHit_cfi')
 process.ecalPreshowerRecHit.ESGain = cms.int32(2)
 process.ecalPreshowerRecHit.ESBaseline = cms.int32(0)
 process.ecalPreshowerRecHit.ESMIPADC = cms.double(50)
@@ -48,7 +85,7 @@ process.DQMStore.referenceFileName = '/dqmdata/dqm/reference/es_reference.root'
 
 ##### EDIT yiiyama Aug 08 2014
 process.dqmSaver.dirName = config.tmpoutdir
-process.dqmSaver.workflow = config.var.workflow
+process.dqmSaver.workflow = options.workflow
 process.dqmSaver.referenceHandling = "skip"
 process.dqmSaver.version = 3
 process.dqmSaver.convention = "Offline"
@@ -57,7 +94,7 @@ process.DQM.collectorPort = 9190
 process.DQM.collectorHost = "ecalod-web01.cms"
 ##### EDIT yiiyama Aug 08 2014
 
-process.load("DQM/EcalPreshowerMonitorModule/EcalPreshowerMonitorTasks_cfi")
+process.load("DQM.EcalPreshowerMonitorModule.EcalPreshowerMonitorTasks_cfi")
 process.ecalPreshowerIntegrityTask.ESDCCCollections = cms.InputTag("esRawToDigi")
 process.ecalPreshowerIntegrityTask.ESKChipCollections = cms.InputTag("esRawToDigi")
 process.ecalPreshowerIntegrityTask.ESDCCCollections = cms.InputTag("esRawToDigi")
@@ -68,7 +105,7 @@ process.ecalPreshowerRawDataTask.ESDCCCollections = cms.InputTag("esRawToDigi")
 process.ecalPreshowerTimingTask.DigiLabel = cms.InputTag("esRawToDigi")
 process.ecalPreshowerTrendTask.ESDCCCollections = cms.InputTag("esRawToDigi")
 
-process.load("DQM/EcalPreshowerMonitorClient/EcalPreshowerMonitorClient_cfi")
+process.load("DQM.EcalPreshowerMonitorClient.EcalPreshowerMonitorClient_cfi")
 del process.dqmInfoES
 process.p = cms.Path(process.preScaler*
                process.esRawToDigi*
@@ -92,10 +129,12 @@ if (process.runType.getRunType() == process.runType.hi_run):
     process.ecalPreshowerRawDataTask.FEDRawDataCollection = cms.InputTag("rawDataRepacker")
 
 # HACK Aug 9 yiiyama
-process.preScaler.prescaleFactor = 50
-process.source.streamLabel = '_streamA_StorageManager'
 process.source.minEventsPerLumi = 1000
 
 process.maxEvents = cms.untracked.PSet(
     input = cms.untracked.int32(-1)
 )
+
+process.source.nextLumiTimeoutMillis = 5000
+process.source.delayMillis = 2000
+
