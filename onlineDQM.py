@@ -4,6 +4,7 @@ import subprocess
 import threading
 import re
 import traceback
+import shutil
 
 from ecaldqmconfig import config
 from conddb import EcalCondDB, RunParameterDB
@@ -11,12 +12,10 @@ from logger import Logger
 
 class GlobalRunFileCopyDaemon(object):
     # TEMPORARY SOLUTION (SEE BELOW)
-    def __init__(self, run, sourceNode, sourceDir, runInputDir, stream):
+    def __init__(self, run, runInputDir, sources):
         self.run = run
         self.targetDir = runInputDir + '/run%s' % run
-        self.sourceNode = sourceNode
-        self.sourceDir = sourceDir
-        self.stream = stream
+        self.sources = sources # [(node, dir, stream), ..]
         self._stop = threading.Event()
         self.files = []
 
@@ -29,38 +28,51 @@ class GlobalRunFileCopyDaemon(object):
 
     def __del__(self):
         self._stop.set()
-
-    def updateList(self):
-        proc = subprocess.Popen('ssh %s "ls %s/run%d"' % (self.sourceNode, self.sourceDir, self.run), shell = True, stdout = subprocess.PIPE, stderr = subprocess.STDOUT)
-        data = ''
-        while proc.poll() is None:
-            data += proc.communicate()[0]
-            time.sleep(2)
-
         try:
-            data += proc.communicate()[0]
+            shutil.rmtree(self.targetDir, True)
         except:
             pass
 
-        if proc.poll() != 0:
-            return
+    def updateList(self):
+        for source in self.sources:
+            proc = subprocess.Popen('ssh %s "ls %s/run%d"' % (source[0], source[1], self.run), shell = True, stdout = subprocess.PIPE, stderr = subprocess.STDOUT)
+            data = ''
+            while proc.poll() is None:
+                data += proc.communicate()[0]
+                time.sleep(2)
+    
+            try:
+                data += proc.communicate()[0]
+            except:
+                pass
+    
+            if proc.poll() != 0:
+                return
 
         self.files = data.split()
 
     def copy(self, lumi):
-        jsnFile = 'run%d_ls%04d_stream%s_StorageManager.jsn' % (self.run, lumi, self.stream)
-        if os.path.exists(self.targetDir + '/' + jsnFile): return True
+        for source in self.sources:
+            jsnFile = 'run%d_ls%04d_stream%s_StorageManager.jsn' % (self.run, lumi, source[2])
+            if os.path.exists(self.targetDir + '/' + jsnFile): return True
+            
+            proc = subprocess.Popen(['scp', '%s:%s/run%d/' % (source[0], source[1], self.run) + jsnFile.replace('jsn', '*'), self.targetDir], stdout = subprocess.PIPE, stderr = subprocess.STDOUT)
+            try:
+                while proc.poll() is None:
+                    proc.communicate()
+                    time.sleep(2)
     
-        proc = subprocess.Popen(['scp', '%s:%s/run%d/' % (self.sourceNode, self.sourceDir, self.run) + jsnFile.replace('jsn', '*'), self.targetDir])
-        try:
-            while proc.poll() is None:
-                time.sleep(2)
+            except KeyboardInterrupt:
+                proc.terminate()
+                while proc.poll() is None:
+                    proc.communicate()
+                    time.sleep(1)
+                raise
 
-        except KeyboardInterrupt:
-            proc.terminate()
-            while proc.poll() is None:
-                time.sleep(1)
-            raise
+            try:
+                proc.communicate()
+            except:
+                pass
 
         return proc.returncode == 0
 
@@ -137,7 +149,7 @@ def runDQM(run, paramDB, logFile):
 
     procs = {}
     if daq == 'central':
-        copyDaemon = GlobalRunFileCopyDaemon(run, 'fu-c2f13-39-01', '/fff/BU0/ramdisk', '/tmp/onlineDQM', 'DQM')
+        copyDaemon = GlobalRunFileCopyDaemon(run, '/tmp/onlineDQM', [('fu-c2f13-39-01', '/fff/BU0/ramdisk', 'DQM'), ('bu-c2f13-27-01', '/store/lustre/mergeMacro', 'Calibration')])
         if len(copyDaemon.files) == 0:
             logFile.write('Source directory empty')
             return INVALID
@@ -149,14 +161,14 @@ def runDQM(run, paramDB, logFile):
 
             log = open(config.logdir + '/ecal_dqm_sourceclient-privlive_cfg.log', 'a')
             log.write('\n\n\n')
-            command = 'source $HOME/DQM/cmssw.sh; exec cmsRun {conf} {common} {ecal} {spec}'.format(conf = config.workdir + '/ecalConfigBuilder.py', common = commonOptions, ecal = ecalOptions, spec = 'cfgType=Physics')
+            command = 'source $HOME/DQM/cmssw.sh; exec cmsRun {conf} {common} {ecal} {spec} | grep -v "Directory hasn\'t changed" | grep -v "Streamer waiting for the next LS"'.format(conf = config.workdir + '/ecalConfigBuilder.py', common = commonOptions, ecal = ecalOptions, spec = 'cfgType=Physics')
             proc = subprocess.Popen(command, shell = True, stdout = log, stderr = subprocess.STDOUT)
             logFile.write(command)
             procs['Physics'] = (proc, log, int(time.time()))
     
             log = open(config.logdir + '/ecalcalib_dqm_sourceclient-privlive_cfg.log', 'a')
             log.write('\n\n\n')
-            command = 'source $HOME/DQM/cmssw.sh; exec cmsRun {conf} {common} {ecal} {spec}'.format(conf = config.workdir + '/ecalConfigBuilder.py', common = commonOptions, ecal = ecalOptions, spec = 'cfgType=Calibration')
+            command = 'source $HOME/DQM/cmssw.sh; exec cmsRun {conf} {common} {ecal} {spec} | grep -v "Directory hasn\'t changed" | grep -v "Streamer waiting for the next LS"'.format(conf = config.workdir + '/ecalConfigBuilder.py', common = commonOptions, ecal = ecalOptions, spec = 'cfgType=Calibration')
             proc = subprocess.Popen(command, shell = True, stdout = log, stderr = subprocess.STDOUT)
             logFile.write(command)
             procs['Calibration'] = (proc, log, int(time.time()))
@@ -164,7 +176,7 @@ def runDQM(run, paramDB, logFile):
         if esIn:
             log = open(config.logdir + '/es_dqm_sourceclient-privlive_cfg.log', 'a')
             log.write('\n\n\n')
-            command = 'source $HOME/DQM/cmssw.sh; exec cmsRun {conf} {common}'.format(conf = config.workdir + '/es_dqm_sourceclient-privlive_cfg.py', common = commonOptions)
+            command = 'source $HOME/DQM/cmssw.sh; exec cmsRun {conf} {common} | grep -v "Directory hasn\'t changed" | grep -v "Streamer waiting for the next LS"'.format(conf = config.workdir + '/es_dqm_sourceclient-privlive_cfg.py', common = commonOptions)
             proc = subprocess.Popen(command, shell = True, stdout = log, stderr = subprocess.STDOUT)
             logFile.write(command)
             procs['ES'] = (proc, log, int(time.time()))
@@ -185,7 +197,7 @@ def runDQM(run, paramDB, logFile):
             
             log = open(config.logdir + '/ecalcalib_dqm_sourceclient-privlive_cfg.log', 'a')
             log.write('\n\n\n')
-            command = 'source $HOME/DQM/cmssw.sh; exec cmsRun {conf} {common} {ecal} {spec}'.format(conf = config.workdir + '/ecalConfigBuilder.py', common = commonOptions, ecal = ecalOptions, spec = 'cfgType=CalibrationStandalone')
+            command = 'source $HOME/DQM/cmssw.sh; exec cmsRun {conf} {common} {ecal} {spec} | grep -v "Directory hasn\'t changed" | grep -v "Streamer waiting for the next LS"'.format(conf = config.workdir + '/ecalConfigBuilder.py', common = commonOptions, ecal = ecalOptions, spec = 'cfgType=CalibrationStandalone')
             proc = subprocess.Popen(command, shell = True, stdout = log, stderr = subprocess.STDOUT)
             logFile.write(command)
             procs['Calibration'] = (proc, log, int(time.time()))
@@ -193,7 +205,7 @@ def runDQM(run, paramDB, logFile):
         if esIn:
             log = open(config.logdir + '/es_dqm_sourceclient-privlive_cfg.log', 'a')
             log.write('\n\n\n')
-            command = 'source $HOME/DQM/cmssw.sh; exec cmsRun {conf} {common}'.format(conf = config.workdir + '/es_dqm_sourceclient-privlive_cfg.py', common = commonOptions)
+            command = 'source $HOME/DQM/cmssw.sh; exec cmsRun {conf} {common} | grep -v "Directory hasn\'t changed" | grep -v "Streamer waiting for the next LS"'.format(conf = config.workdir + '/es_dqm_sourceclient-privlive_cfg.py', common = commonOptions)
             proc = subprocess.Popen(command, shell = True, stdout = log, stderr = subprocess.STDOUT)
             logFile.write(command)
             procs['ES'] = (proc, log, int(time.time()))
@@ -255,12 +267,14 @@ def writeDB(run, condDB, runParamDB, logFile):
 #
 #                log.close()
 
-    try:
-        logFile.write('MonRun IOV:', condDB.getMonRunIOV(condDB.getRunIOV(run)).IOV_ID)
-        return SUCCESS
-    except:
-        logFile.write('DB writing failed.')
-        return FAILED
+#    try:
+#        logFile.write('MonRun IOV:', condDB.getMonRunIOV(condDB.getRunIOV(run)).values['IOV_ID'])
+#        return SUCCESS
+#    except:
+#        logFile.write('DB writing failed.')
+#        return FAILED
+
+    return SUCCESS
 
 
 if __name__ == '__main__':
@@ -318,13 +332,13 @@ if __name__ == '__main__':
             logFile.write('Monitoring for a new run')
     
             try:
-                result = runDQM(currentRun, runParamDB, logFile)
-
-                if result == INVALID:
-                    currentRun += 1
+                if currentRun == runParamDB.getMaxRun():
+                    time.sleep(60)
                     continue
 
-                elif result == SUCCESS:
+                result = runDQM(currentRun, runParamDB, logFile)
+                
+                if result == SUCCESS:
                     logFile.write('CMSSW job successfully returned.')
 
                     result = writeDB(currentRun, ecalCondDB, runParamDB, logFile)
@@ -345,6 +359,8 @@ if __name__ == '__main__':
                 elif result == FAILED:
                     logFile.write('CMSSW job failed.')
     #                ecalCondDB.setMonRunOutcome(currentRun, 'dqmfail')
+
+                currentRun += 1
     
             except KeyboardInterrupt:
                 logFile.write('Quit')

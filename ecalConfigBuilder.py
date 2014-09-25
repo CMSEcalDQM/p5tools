@@ -343,9 +343,9 @@ def buildEcalDQMModules(process, options):
     )
 
     process.MessageLogger = cms.Service("MessageLogger",
-        destinations = cms.untracked.vstring('cerr'),
+        destinations = cms.untracked.vstring('cout'),
         categories = cms.untracked.vstring('EcalDQM', 'fileAction'),
-        cerr = cms.untracked.PSet(
+        cout = cms.untracked.PSet(
             threshold = cms.untracked.string("WARNING"),
             noLineBreaks = cms.untracked.bool(True),
             noTimeStamps = cms.untracked.bool(True),
@@ -798,7 +798,7 @@ if __name__ == '__main__':
         options.MGPAGainsPN = map(int, options.MGPAGainsPN.split(','))
 
         if not options.rawDataCollection:
-            if options.environment == 'CMSLive' and options.cfgType == 'Calibration':
+            if (options.environment == 'CMSLive' or options.environment == 'PrivLive') and options.cfgType == 'Calibration':
                 options.rawDataCollection = 'hltEcalCalibrationRaw'
             else:
                 options.rawDataCollection = 'rawDataCollector'
@@ -937,7 +937,7 @@ if options.outputFile:
         print sys.argv
 
         if not options.rawDataCollection:
-            if options.environment == 'CMSLive' and options.cfgType == 'Calibration':
+            if (options.environment == 'CMSLive' or options.environment == 'PrivLive') and options.cfgType == 'Calibration':
                 options.rawDataCollection = 'hltEcalCalibrationRaw'
             else:
                 options.rawDataCollection = 'rawDataCollector'
