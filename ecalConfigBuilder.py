@@ -362,7 +362,8 @@ def buildEcalDQMModules(process, options):
     
     if live:
         process.load("DQM.Integration.test.inputsource_cfi")  # input source uses VarParsing (Jul 2 2014)
-        process.source.endOfRunKills = False
+        if not central:
+            process.source.endOfRunKills = False
 
     else:
         if '.dat' in options.inputFiles[0]:
@@ -498,7 +499,7 @@ def buildEcalDQMSequences(process, options):
             )
 
             if live:
-#                process.ecalLaserLedPath.insert(1, process.ecalLaserLedFilter)
+                process.ecalLaserLedPath.insert(1, process.ecalLaserLedFilter)
                 process.ecalLaserLedPath.insert(0, process.preScaler)
 
             paths.append(process.ecalLaserLedPath)
@@ -512,7 +513,7 @@ def buildEcalDQMSequences(process, options):
             )
 
             if live:
-#                process.ecalTestPulsePath.insert(1, process.ecalTestPulseFilter)
+                process.ecalTestPulsePath.insert(1, process.ecalTestPulseFilter)
                 process.ecalTestPulsePath.insert(0, process.preScaler)
 
             paths.append(process.ecalTestPulsePath)
@@ -525,7 +526,7 @@ def buildEcalDQMSequences(process, options):
             )
 
             if live:
-#                process.ecalPedestalPath.insert(1, process.ecalPedestalFilter)
+                process.ecalPedestalPath.insert(1, process.ecalPedestalFilter)
                 process.ecalPedestalPath.insert(0, process.preScaler)
 
             paths.append(process.ecalPedestalPath)
@@ -550,7 +551,7 @@ def buildEcalDQMSequences(process, options):
             )
 
             if live:
-#                process.ecalClientPath.insert(1, process.ecalPhysicsFilter)
+                process.ecalClientPath.insert(1, process.ecalPhysicsFilter)
                 process.ecalClientPath.insert(0, process.preScaler)
 
             paths.append(process.ecalClientPath)
@@ -566,7 +567,7 @@ def buildEcalDQMSequences(process, options):
             )
 
             if live:
-#                process.ecalClientPath.insert(1, process.ecalCalibrationFilter)
+                process.ecalClientPath.insert(1, process.ecalCalibrationFilter)
                 process.ecalClientPath.insert(0, process.preScaler)
 
             paths.append(process.ecalClientPath)
@@ -757,7 +758,7 @@ if __name__ == '__main__':
         commonOpts.add_option("-s", "--steps", dest = "steps", default = "sourceclient", help = "STEPS=[source][client]", metavar = "STEPS")
         commonOpts.add_option("-i", "--input-files", dest = "inputFiles", default = "", help = "source file name (comma separated) or URL", metavar = "SOURCE")
         commonOpts.add_option("-I", "--input-list", dest = "inputList", default = "", help = "file containing list of sources", metavar = "FILE")
-        commonOpts.add_option("-r", "--rawdata", dest = "rawDataCollection", default = "rawDataCollector", help = "collection name", metavar = "RAWDATA")
+        commonOpts.add_option("-r", "--rawdata", dest = "rawDataCollection", default = "", help = "collection name", metavar = "RAWDATA")
         commonOpts.add_option("-g", "--global-tag", dest = "globalTag", default = "auto:com10", help = "global tag", metavar = "TAG")
         commonOpts.add_option("-O", "--output-mode", type = "int", dest = "outputMode", default = 1, help = "0: no output, 1: DQM output, 2: EDM output", metavar = "MODE")
         commonOpts.add_option("-w", "--workflow", dest = "workflow", default = "", help = "offline workflow", metavar = "WORKFLOW")
@@ -795,6 +796,12 @@ if __name__ == '__main__':
         options.laserWavelengths = map(int, options.laserWavelengths.split(','))
         options.MGPAGains = map(int, options.MGPAGains.split(','))
         options.MGPAGainsPN = map(int, options.MGPAGainsPN.split(','))
+
+        if not options.rawDataCollection:
+            if options.environment == 'CMSLive' and options.cfgType == 'Calibration':
+                options.rawDataCollection = 'hltEcalCalibrationRaw'
+            else:
+                options.rawDataCollection = 'rawDataCollector'
 
         generator = CfgGenerator('process')
 
@@ -929,10 +936,13 @@ if options.outputFile:
 
         print sys.argv
 
-        process = cms.Process("DQM")
+        if not options.rawDataCollection:
+            if options.environment == 'CMSLive' and options.cfgType == 'Calibration':
+                options.rawDataCollection = 'hltEcalCalibrationRaw'
+            else:
+                options.rawDataCollection = 'rawDataCollector'
 
-        def executeLine(line):
-            exec(line.strip())
+        process = cms.Process("DQM")
 
         buildEcalDQMModules(process, options)
         buildEcalDQMSequences(process, options)
