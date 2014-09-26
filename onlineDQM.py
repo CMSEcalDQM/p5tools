@@ -79,26 +79,41 @@ class GlobalRunFileCopyDaemon(object):
     def start(self):
         copied = set([])
 
+        try:
+            os.unlink('{rundir}/run{run}/run{run}_ls0000_EoR.jsn'.format(rundir = self.targetDir, run = self.run))
+        except:
+            pass
+
         while True:
             jsonFiles = filter(lambda name: name.endswith('.jsn'), self.files)
     
             lumis = map(lambda name: int(re.match('run%d_ls([0-9]+)' % self.run, name).group(1)), jsonFiles)
             lumis = sorted(list(set(lumis) - copied))
 
-            if lumis[0] == 0:
-                EOR = True
-            else:
-                EOR = False
-
-            for lumi in lumis:
-                if self.copy(lumi):
-                    copied.add(lumi)
-
-            if EOR:
-                break
-
-            if self._stop.isSet():
-                break
+            if len(lumis):
+    
+                if lumis[0] == 0:
+                    EOR = True
+                else:
+                    EOR = False
+    
+                for lumi in lumis:
+                    if self.copy(lumi):
+                        copied.add(lumi)
+    
+                if EOR:
+                    for source in self.sources:
+                        proc = subprocess.Popen(['scp', '{node}:{rundir}/run{run}/run{run}_ls0000_EoR.jsn'.format(node = source[0], rundir = source[1], run = self.run), self.targetDir], stdout = subprocess.PIPE, stderr = subprocess.STDOUT)
+                        while proc.poll() is None:
+                            proc.communicate()
+                            time.sleep(2)
+    
+                        if proc.returncode == 0: break
+    
+                    break
+    
+                if self._stop.isSet():
+                    break
 
             time.sleep(60)
 
@@ -149,7 +164,7 @@ def runDQM(run, paramDB, logFile):
 
     procs = {}
     if daq == 'central':
-        copyDaemon = GlobalRunFileCopyDaemon(run, '/tmp/onlineDQM', [('fu-c2f13-39-01', '/fff/BU0/ramdisk', 'DQM'), ('bu-c2f13-27-01', '/store/lustre/mergeMacro', 'Calibration')])
+        copyDaemon = GlobalRunFileCopyDaemon(run, '/tmp/onlineDQM', [('fu-c2f13-39-01', '/fff/BU0/ramdisk', 'DQM'), ('fu-c2f13-39-01', '/fff/BU0/ramdisk', 'CalibrationDQM')])
         if len(copyDaemon.files) == 0:
             logFile.write('Source directory empty')
             return INVALID

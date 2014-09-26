@@ -364,6 +364,8 @@ def buildEcalDQMModules(process, options):
         process.load("DQM.Integration.test.inputsource_cfi")  # input source uses VarParsing (Jul 2 2014)
         if not central:
             process.source.endOfRunKills = False
+#        if calib:
+#            process.source.streamLabel = '_streamCalibrationDQM_StorageManager'
 
     else:
         if '.dat' in options.inputFiles[0]:
@@ -485,7 +487,8 @@ def buildEcalDQMSequences(process, options):
             )
 
             if live:
-                process.ecalMonitorPath.insert(process.ecalMonitorPath.index(process.ecalRecoSequence), process.ecalPhysicsFilter)
+                pass
+#                process.ecalMonitorPath.insert(process.ecalMonitorPath.index(process.ecalRecoSequence), process.ecalPhysicsFilter)
 
             paths.append(process.ecalMonitorPath)
 
@@ -499,7 +502,7 @@ def buildEcalDQMSequences(process, options):
             )
 
             if live:
-                process.ecalLaserLedPath.insert(1, process.ecalLaserLedFilter)
+#                process.ecalLaserLedPath.insert(1, process.ecalLaserLedFilter)
                 process.ecalLaserLedPath.insert(0, process.preScaler)
 
             paths.append(process.ecalLaserLedPath)
@@ -513,7 +516,7 @@ def buildEcalDQMSequences(process, options):
             )
 
             if live:
-                process.ecalTestPulsePath.insert(1, process.ecalTestPulseFilter)
+#                process.ecalTestPulsePath.insert(1, process.ecalTestPulseFilter)
                 process.ecalTestPulsePath.insert(0, process.preScaler)
 
             paths.append(process.ecalTestPulsePath)
@@ -526,7 +529,7 @@ def buildEcalDQMSequences(process, options):
             )
 
             if live:
-                process.ecalPedestalPath.insert(1, process.ecalPedestalFilter)
+#                process.ecalPedestalPath.insert(1, process.ecalPedestalFilter)
                 process.ecalPedestalPath.insert(0, process.preScaler)
 
             paths.append(process.ecalPedestalPath)
@@ -551,7 +554,7 @@ def buildEcalDQMSequences(process, options):
             )
 
             if live:
-                process.ecalClientPath.insert(1, process.ecalPhysicsFilter)
+#                process.ecalClientPath.insert(1, process.ecalPhysicsFilter)
                 process.ecalClientPath.insert(0, process.preScaler)
 
             paths.append(process.ecalClientPath)
@@ -567,7 +570,7 @@ def buildEcalDQMSequences(process, options):
             )
 
             if live:
-                process.ecalClientPath.insert(1, process.ecalCalibrationFilter)
+#                process.ecalClientPath.insert(1, process.ecalCalibrationFilter)
                 process.ecalClientPath.insert(0, process.preScaler)
 
             paths.append(process.ecalClientPath)
@@ -907,7 +910,7 @@ if options.outputFile:
         options.register("cfgType", default = "Physics", mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = "CONFIG=(Physics|Calibration|CalibrationStandalone|Laser)")
         options.register("steps", default = "sourceclient", mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = "DQM steps to perform")
         options.register('inputList', default = '', mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = 'File containing list of input files')
-        options.register("rawDataCollection", default = "rawDataCollector", mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = "collection name")
+        options.register("rawDataCollection", default = "", mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = "collection name")
         options.register("globalTag", default = 'auto:com10', mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = "GlobalTag")
         options.register("outputMode", default = 1, mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.int, info = "0: no output, 1: DQM output, 2: EDM output")
         options.register("outputPath", default = "", mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = "DQMFileSaver output directory / PoolOutputModule output path")
@@ -971,3 +974,10 @@ if options.outputFile:
             elif runType.getRunType() == runType.hpu_run:
                 process.DQMStore.referenceFileName = referenceFileName.replace('.root', '_hpu.root')
                 process.source.SelectEvents = cms.untracked.PSet(SelectEvents = cms.vstring('*'))
+
+            process.ecalMonitorTask.workerParameters.TimingTask.params.energyThresholdEB = 0.
+            process.ecalMonitorTask.workerParameters.TimingTask.params.energyThresholdEE = 0.
+            process.ecalMonitorTask.workerParameters.OccupancyTask.params.tpThreshold = 0.
+
+        process.source.minEventsPerLumi = 100
+        process.source.nextLumiTimeoutMillis = 3000
