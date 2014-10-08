@@ -53,7 +53,7 @@ class GlobalRunFileCopyDaemon(object):
 
     def copy(self, lumi):
         for source in self.sources:
-            jsnFile = 'run%d_ls%04d_stream%s_StorageManager.jsn' % (self.run, lumi, source[2])
+            jsnFile = 'run%d_ls%04d_stream%s_mrg-c2f13-35-01.jsn' % (self.run, lumi, source[2])
             if os.path.exists(self.targetDir + '/' + jsnFile): return True
             
             proc = subprocess.Popen(['scp', '%s:%s/run%d/' % (source[0], source[1], self.run) + jsnFile.replace('jsn', '*'), self.targetDir], stdout = subprocess.PIPE, stderr = subprocess.STDOUT)
@@ -164,7 +164,7 @@ def runDQM(run, paramDB, logFile):
 
     procs = {}
     if daq == 'central':
-        copyDaemon = GlobalRunFileCopyDaemon(run, '/tmp/onlineDQM', [('fu-c2f13-39-01', '/fff/BU0/ramdisk', 'DQM'), ('fu-c2f13-39-01', '/fff/BU0/ramdisk', 'CalibrationDQM')])
+        copyDaemon = GlobalRunFileCopyDaemon(run, '/tmp/onlineDQM', [('fu-c2f13-39-01', '/fff/BU0/ramdisk', 'DQM'), ('fu-c2f13-39-01', '/fff/BU0/ramdisk', 'DQMCalibration')])
         if len(copyDaemon.files) == 0:
             logFile.write('Source directory empty')
             return INVALID
@@ -346,10 +346,6 @@ if __name__ == '__main__':
             logFile.write('Monitoring for a new run')
     
             try:
-                if currentRun == runParamDB.getMaxRun():
-                    time.sleep(60)
-                    continue
-
                 result = runDQM(currentRun, runParamDB, logFile)
                 
                 if result == SUCCESS:
@@ -374,6 +370,10 @@ if __name__ == '__main__':
                     logFile.write('CMSSW job failed.')
     #                ecalCondDB.setMonRunOutcome(currentRun, 'dqmfail')
 
+                if currentRun == runParamDB.getLatestRun():
+                    time.sleep(60)
+                    continue
+
                 currentRun += 1
     
             except KeyboardInterrupt:
@@ -390,3 +390,4 @@ if __name__ == '__main__':
         ecalCondDB.close()
 
     runParamDB.close()
+

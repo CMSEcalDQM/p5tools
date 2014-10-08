@@ -362,7 +362,9 @@ def buildEcalDQMModules(process, options):
         if not central:
             process.source.endOfRunKills = False
         if calib:
-            process.source.streamLabel = '_streamDQMCalibration_StorageManager'
+            process.source.streamLabel = 'streamDQMCalibration'
+        else:
+            process.source.streamLabel = 'streamDQM'
 
     else:
         if '.dat' in options.inputFiles[0]:
@@ -971,3 +973,4 @@ if options.outputFile:
 
         process.source.minEventsPerLumi = 100
         process.source.nextLumiTimeoutMillis = 3000
+
