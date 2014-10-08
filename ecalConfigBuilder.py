@@ -343,17 +343,14 @@ def buildEcalDQMModules(process, options):
     )
 
     process.MessageLogger = cms.Service("MessageLogger",
-        destinations = cms.untracked.vstring('cout'),
-        categories = cms.untracked.vstring('EcalDQM', 'fileAction'),
-        cout = cms.untracked.PSet(
+        destinations = cms.untracked.vstring('cerr'),
+        categories = cms.untracked.vstring('EcalDQM'),
+        cerr = cms.untracked.PSet(
             threshold = cms.untracked.string("WARNING"),
             noLineBreaks = cms.untracked.bool(True),
             noTimeStamps = cms.untracked.bool(True),
             default = cms.untracked.PSet(
                 limit = cms.untracked.int32(-1)
-            ),
-            fileAction = cms.untracked.PSet(
-                limit = cms.untracked.int32(10)
             )
         )
     )
@@ -365,7 +362,7 @@ def buildEcalDQMModules(process, options):
         if not central:
             process.source.endOfRunKills = False
         if calib:
-            process.source.streamLabel = '_streamCalibrationDQM_StorageManager'
+            process.source.streamLabel = '_streamDQMCalibration_StorageManager'
 
     else:
         if '.dat' in options.inputFiles[0]:
@@ -487,8 +484,7 @@ def buildEcalDQMSequences(process, options):
             )
 
             if live:
-                pass
-#                process.ecalMonitorPath.insert(process.ecalMonitorPath.index(process.ecalRecoSequence), process.ecalPhysicsFilter)
+                process.ecalMonitorPath.insert(process.ecalMonitorPath.index(process.ecalRecoSequence), process.ecalPhysicsFilter)
 
             paths.append(process.ecalMonitorPath)
 
@@ -502,7 +498,7 @@ def buildEcalDQMSequences(process, options):
             )
 
             if live:
-#                process.ecalLaserLedPath.insert(1, process.ecalLaserLedFilter)
+                process.ecalLaserLedPath.insert(1, process.ecalLaserLedFilter)
                 process.ecalLaserLedPath.insert(0, process.preScaler)
 
             paths.append(process.ecalLaserLedPath)
@@ -516,7 +512,7 @@ def buildEcalDQMSequences(process, options):
             )
 
             if live:
-#                process.ecalTestPulsePath.insert(1, process.ecalTestPulseFilter)
+                process.ecalTestPulsePath.insert(1, process.ecalTestPulseFilter)
                 process.ecalTestPulsePath.insert(0, process.preScaler)
 
             paths.append(process.ecalTestPulsePath)
@@ -529,7 +525,7 @@ def buildEcalDQMSequences(process, options):
             )
 
             if live:
-#                process.ecalPedestalPath.insert(1, process.ecalPedestalFilter)
+                process.ecalPedestalPath.insert(1, process.ecalPedestalFilter)
                 process.ecalPedestalPath.insert(0, process.preScaler)
 
             paths.append(process.ecalPedestalPath)
@@ -554,7 +550,7 @@ def buildEcalDQMSequences(process, options):
             )
 
             if live:
-#                process.ecalClientPath.insert(1, process.ecalPhysicsFilter)
+                process.ecalClientPath.insert(1, process.ecalPhysicsFilter)
                 process.ecalClientPath.insert(0, process.preScaler)
 
             paths.append(process.ecalClientPath)
@@ -570,7 +566,7 @@ def buildEcalDQMSequences(process, options):
             )
 
             if live:
-#                process.ecalClientPath.insert(1, process.ecalCalibrationFilter)
+                process.ecalClientPath.insert(1, process.ecalCalibrationFilter)
                 process.ecalClientPath.insert(0, process.preScaler)
 
             paths.append(process.ecalClientPath)
@@ -672,12 +668,6 @@ if __name__ == '__main__':
             def load(self, path):
                 self._cmsObject.load(path)
                 self._loadPaths.append(path)
-
-#            def loadFile(self, path):
-#                self._loadPaths.append(path)
-#
-#            def addLine(self, line):
-#                self._lines.append(line.strip())
 
             def generate(self):
                 output = 'process = cms.Process("' + self._name + '")\n\n'
@@ -838,9 +828,9 @@ if __name__ == '__main__':
         cfgfile = file(fileName, "w")
     
         cfgfile.write("### AUTO-GENERATED CMSRUN CONFIGURATION FOR ECAL DQM ###\n")
+        cfgfile.write('import FWCore.ParameterSet.Config as cms\n\n')
         if 'Live' not in options.environment:
             cfgfile.write("""
-import FWCore.ParameterSet.Config as cms
 from FWCore.ParameterSet.VarParsing import VarParsing
 
 options = VarParsing('analysis')
