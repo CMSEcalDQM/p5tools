@@ -304,13 +304,12 @@ if __name__ == '__main__':
 
     (options, args) = parser.parse_args()
 
+    runParamDB = RunParameterDB(config.dbread.dbName, config.dbread.dbUserName, config.dbread.dbPassword)
+
     try:
         currentRun = int(args[0])
     except:
-        parser.print_usage()
-        sys.exit(1)
-
-    runParamDB = RunParameterDB(config.dbread.dbName, config.dbread.dbUserName, config.dbread.dbPassword)
+        currentRun = runParamDB.getLatestRun()
 
     if options.reprocess:
         try:

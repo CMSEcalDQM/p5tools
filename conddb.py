@@ -14,7 +14,6 @@ class CondDB(object):
 
             for iC in range(len(row_)):
                 self.values[descriptions_[iC][0]] = row_[iC]
-                setattr(self, descriptions_[iC][0], row_[iC])
 
 
     def __init__(self, dbName_, user_, password_):
@@ -68,7 +67,7 @@ class EcalCondDB(CondDB):
         if len(row.values) == 0:
             return 0
         else:
-            return row.RUN_NUM
+            return row.values['RUN_NUM']
 
     def getRunIOV(self, run_, location_ = 'P5_Co'):
         return self.getOneRow('\
@@ -83,7 +82,7 @@ class EcalCondDB(CondDB):
             run = run_, loc = location_)
         
     def getMonRunIOV(self, runIOV_):
-        return self.getOneRow('SELECT * FROM MON_RUN_IOV WHERE RUN_IOV_ID = :runiov AND SUBRUN_NUM = 1', runiov = runIOV_.IOV_ID)
+        return self.getOneRow('SELECT * FROM MON_RUN_IOV WHERE RUN_IOV_ID = :runiov AND SUBRUN_NUM = 1', runiov = runIOV_.values['IOV_ID'])
 
     def insertMonRunIOV(self, runIOV_):
         # these parameters are variable in principle but fixed in practice
@@ -94,10 +93,10 @@ class EcalCondDB(CondDB):
         self._cur.execute('INSERT INTO MON_RUN_IOV (IOV_ID, TAG_ID, RUN_IOV_ID, SUBRUN_NUM, SUBRUN_START, SUBRUN_END)\
         VALUES\
         (mon_run_iov_sq.NextVal, :tag, :runiov, 1, :stt, :edt)',
-                          tag = monRunTag.TAG_ID,
-                          runiov = runIOV_.IOV_ID,
-                          stt = runIOV_.RUN_START,
-                          edt = runIOV_.RUN_END)
+                          tag = monRunTag.values['TAG_ID'],
+                          runiov = runIOV_.values['IOV_ID'],
+                          stt = runIOV_.values['RUN_START'],
+                          edt = runIOV_.values['RUN_END'])
             
     def setMonRunOutcome(self, run_, outcome_, location_ = 'P5_Co'):
         # get the outcome definition
@@ -123,12 +122,12 @@ class EcalCondDB(CondDB):
         #  Later, the DQM job was split into EB and EE, and the DB writing accordingly, so there were two entries per run with LOGIC_ID = 1000000000 and 2000000000.
         #  Even after the EB and EE DQM were merged, we kept writing two entries per run until 2014. The two rows were complete duplicate of each other.
         #  Since April 2014 we are back to writing only one entry per run with LOGIC_ID = 1.
-        monRunDat = self.getOneRow('SELECT * FROM MON_RUN_DAT WHERE IOV_ID = :id', id = monRunIOV.IOV_ID)
+        monRunDat = self.getOneRow('SELECT * FROM MON_RUN_DAT WHERE IOV_ID = :id', id = monRunIOV.values['IOV_ID'])
         if len(monRunDat.values) == 0:
-            self._cur.execute('INSERT INTO MON_RUN_DAT (IOV_ID, LOGIC_ID) VALUES (:id, 1)', monRunIOV.IOV_ID)
+            self._cur.execute('INSERT INTO MON_RUN_DAT (IOV_ID, LOGIC_ID) VALUES (:id, 1)', monRunIOV.values['IOV_ID'])
 
-        elif monRunDat.RUN_OUTCOME_ID != outcomeDef.DEF_ID:
-            self._cur.execute('UPDATE MON_RUN_DAT SET RUN_OUTCOME_ID = :outcome WHERE IOV_ID = :iov', outcome = outcomeDef.DEF_ID, iov = monRunIOV.IOV_ID)
+        elif monRunDat.values['RUN_OUTCOME_ID'] != outcomeDef.values['DEF_ID']:
+            self._cur.execute('UPDATE MON_RUN_DAT SET RUN_OUTCOME_ID = :outcome WHERE IOV_ID = :iov', outcome = outcomeDef.values['DEF_ID'], iov = monRunIOV.values['IOV_ID'])
 
 
 class RunParameterDB(CondDB):
@@ -138,6 +137,17 @@ class RunParameterDB(CondDB):
 
     def __init__(self, dbName_, user_, password_):
         CondDB.__init__(self, dbName_, user_, password_)
+
+    def getLatestRun(self):
+        row = self.getOneRow('\
+        SELECT MAX(RUNNUMBER) FROM\
+        CMS_RUNINFO.RUNSESSION_PARAMETER
+        ')
+
+        if len(row.values) == 0:
+            return 0
+        else:
+            return row.values['MAX(RUNNUMBER)']
 
     def getRunParameter(self, run, paramName):
         row = self.getOneRow('\
@@ -152,7 +162,7 @@ class RunParameterDB(CondDB):
         if len(row.values) == 0:
             return ''
         else:
-            return row.STRING_VALUE
+            return row.values['STRING_VALUE']
 
     def getDAQType(self, run):
         matches = re.match('/global_configuration_map/cms/(central|minidaq)/', self.getRunParameter(run, 'CMS.LVL0:GLOBAL_CONF_KEY').lower())
@@ -168,4 +178,4 @@ if __name__ == '__main__': # FOR DEBUGGING
 
     db = RunParameterDB(config.dbread.dbName, config.dbread.dbUserName, config.dbread.dbPassword)
 
-    print db.getRunParameter(225680, 'CMS.LVL0:ECAL')
+    print db.getLatestRun()
