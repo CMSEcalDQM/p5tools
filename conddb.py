@@ -141,7 +141,7 @@ class RunParameterDB(CondDB):
     def getLatestRun(self):
         row = self.getOneRow('\
         SELECT MAX(RUNNUMBER) FROM\
-        CMS_RUNINFO.RUNSESSION_PARAMETER
+        CMS_RUNINFO.RUNSESSION_PARAMETER\
         ')
 
         if len(row.values) == 0:
