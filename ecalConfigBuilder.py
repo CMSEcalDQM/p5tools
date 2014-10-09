@@ -137,11 +137,11 @@ def buildEcalDQMModules(process, options):
         if isClient:
             process.load("DQM.EcalMonitorClient.EcalMonitorClient_cfi")
             process.ecalMonitorClient.verbosity = verbosity
-            if 'Offline' not in options.environment:
+            if live:
                 process.ecalMonitorClient.workers = ["IntegrityClient", "OccupancyClient", "PresampleClient", "RawDataClient", "TimingClient", "SelectiveReadoutClient", "TrigPrimClient", "SummaryClient"]
                 process.ecalMonitorClient.workerParameters.SummaryClient.params.activeSources = ["Integrity", "RawData", "Presample", "TriggerPrimitives", "Timing", "HotCell"]
-                if live:
-                    process.ecalMonitorClient.commonParameters.onlineMode = True
+
+                process.ecalMonitorClient.commonParameters.onlineMode = True
 
     elif calib:
         from DQM.EcalCommon.CommonParams_cfi import ecaldqmLaserWavelengths, ecaldqmMGPAGains, ecaldqmMGPAGainsPN
@@ -156,6 +156,12 @@ def buildEcalDQMModules(process, options):
             process.ecalTestPulseMonitorTask.verbosity = verbosity
             process.ecalPNDiodeMonitorTask.verbosity = verbosity
 
+            if live:
+                process.ecalLaserLedMonitorTask.commonParameters.onlineMode = True
+                process.ecalPedestalMonitorTask.commonParameters.onlineMode = True
+                process.ecalTestPulseMonitorTask.commonParameters.onlineMode = True
+                process.ecalPNDiodeMonitorTask.commonParameters.onlineMode = True
+
             if options.cfgType == 'CalibrationStandalone':
                 process.load("DQM.EcalMonitorTasks.EcalMonitorTask_cfi")
                 process.ecalMonitorTask.workers = ["IntegrityTask", "RawDataTask"]
@@ -164,6 +170,10 @@ def buildEcalDQMModules(process, options):
         if isClient:
             process.load("DQM.EcalMonitorClient.EcalCalibMonitorClient_cfi")
             process.ecalCalibMonitorClient.verbosity = verbosity
+
+            if live:
+                process.ecalCalibMonitorClient.commonParameters.onlineMode = True
+            
             if options.cfgType == 'CalibrationStandalone':
                 process.ecalCalibMonitorClient.workerParameters.SummaryClient.params.activeSources = ["Integrity", "RawData"]
                 if options.calibType == 'PEDESTAL':
@@ -321,11 +331,9 @@ def buildEcalDQMModules(process, options):
         process.load("Configuration.StandardSequences.FrontierConditions_GlobalTag_cff")
         if options.globalTag.startswith('auto:'):
             from Configuration.AlCa.GlobalTag import GlobalTag
-            process.GlobalTag = GlobalTag(process.GlobalTag, options.globalTag, '')
+            process.GlobalTag = GlobalTag(process.GlobalTag._cmsObject, options.globalTag, '')
         else:
             process.GlobalTag.globaltag = options.globalTag
-
-        process.globalTagPrefer = cms.ESPrefer('PoolDBESSource', 'GlobalTag')
 
     connect = process.GlobalTag.connect.value()
    
@@ -793,7 +801,7 @@ if __name__ == '__main__':
         options.MGPAGainsPN = map(int, options.MGPAGainsPN.split(','))
 
         if not options.rawDataCollection:
-            if (options.environment == 'CMSLive' or options.environment == 'PrivLive') and options.cfgType == 'Calibration':
+            if options.cfgType == 'Calibration':
                 options.rawDataCollection = 'hltEcalCalibrationRaw'
             else:
                 options.rawDataCollection = 'rawDataCollector'
