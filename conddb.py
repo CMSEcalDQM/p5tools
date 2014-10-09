@@ -149,6 +149,15 @@ class RunParameterDB(CondDB):
         else:
             return row.values['MAX(RUNNUMBER)']
 
+    def getLatestEcalRun(self):
+        latest = self.getLatestRun()
+        while True:
+            if self.getRunParameter(latest, 'CMS.LVL0:ECAL') == 'In' or self.getRunParameter(latest, 'CMS.LVL0:ES') == 'In':
+                break
+            latest -= 1
+
+        return latest
+
     def getRunParameter(self, run, paramName):
         row = self.getOneRow('\
         SELECT STRING_VALUE FROM\

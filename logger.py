@@ -2,8 +2,8 @@ import os
 import time
 
 class Logger(object):
-    def __init__(self, path_):
-        self._file = open(path_, 'a')
+    def __init__(self, path_, opt = 'a'):
+        self._file = open(path_, opt)
 
     def __del__(self):
         self._file.close()

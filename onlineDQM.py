@@ -44,7 +44,7 @@ class GlobalRunFileCopyDaemon(object):
         self.allLumis = set([])
 
         for node, directory, stream, suffix in self.sources:
-            proc = subprocess.Popen('ssh {node} "ls {rundir}/run{run}/run{run}_ls*.jsn"' % (node = node, rundir = directory, run = self.run), shell = True, stdout = subprocess.PIPE, stderr = subprocess.STDOUT)
+            proc = subprocess.Popen('ssh {node} "ls {rundir}/run{run}/run{run}_ls*.jsn"'.format(node = node, rundir = directory, run = self.run), shell = True, stdout = subprocess.PIPE, stderr = subprocess.STDOUT)
             data = ''
             while proc.poll() is None:
                 data += proc.communicate()[0]
@@ -58,9 +58,10 @@ class GlobalRunFileCopyDaemon(object):
             if proc.poll() != 0:
                 return
 
-            self.allLumis |= set(map(lambda name: int(re.match('run%d_ls([0-9]+)' % self.run, name).group(1)), data.split()))
-
-        self.logFile.write('New files: ' + str(self.allLumis))
+            for filename in data.split():
+                matches = re.search('run%d_ls([0-9]+)' % self.run, filename)
+                if not matches: continue
+                self.allLumis.add(int(matches.group(1)))
 
     def copy(self, lumi):
         for node, directory, stream, suffix in self.sources:
@@ -100,25 +101,23 @@ class GlobalRunFileCopyDaemon(object):
         while True:
             lumis = sorted(list(self.allLumis - copied))
 
-            if len(lumis):
-                if lumis[0] == 0:
-                    EOR = True
-                else:
-                    EOR = False
-    
-                for lumi in lumis:
-                    if lumi < self.startLumi:
-                        copied.add(lumi)
-                        continue
+            self.logFile.write('Lumis to copy: ' + str(lumis))
 
-                    if self.copy(lumi):
-                        copied.add(lumi)
+            EOR = (len(lumis) == 0 or lumis[0] == 0)
+
+            for lumi in lumis:
+                if lumi < self.startLumi:
+                    copied.add(lumi)
+                    continue
+
+                if self.copy(lumi):
+                    copied.add(lumi)
     
-                if EOR:
-                    break
-    
-                if self._stop.isSet():
-                    break
+            if EOR:
+                break
+
+            if self._stop.isSet():
+                break
 
             time.sleep(60)
 
@@ -128,23 +127,12 @@ class GlobalRunFileCopyDaemon(object):
         self._stop.set()
 
 
-def startDQM(run, startLumi, paramDB, logFile):
+def startDQM(run, startLumi, daq, dqmRunKey, ecalIn, esIn, logFile):
     """
     Collect the run parameters and start the DQM job if a run is detected.
     """
 
     logFile.write('Processing run', run)
-
-    daq = paramDB.getDAQType(run)
-
-    if not daq:
-        return {}
-
-    logFile.write('DAQ type: ', daq)
-
-    dqmRunKey = paramDB.getRunParameter(run, 'CMS.LVL0:DQM_RUNKEY_AT_CONFIGURE').lower()
-
-    logFile.write('DQM key: ', dqmRunKey if dqmRunKey else 'Undefined')
 
     if dqmRunKey == 'cosmic_run':
         workflowBase = 'Cosmics'
@@ -161,7 +149,7 @@ def startDQM(run, startLumi, paramDB, logFile):
         commonOptions = 'runNumber={run} runInputDir={inputDir} workflow=/{dataset}/{period}/CentralDAQ'.format(run = run, inputDir = '/tmp/onlineDQM', dataset = workflowBase, period = config.period)
 
         if ecalIn:
-            ecalOptions = 'environment=PrivLive outputPath={outputPath} verbosity=1'.format(outputPath = config.tmpoutdir)
+            ecalOptions = 'environment=PrivLive outputPath={outputPath} verbosity=0'.format(outputPath = config.tmpoutdir)
 
             log = open(config.logdir + '/ecal_dqm_sourceclient-privlive_cfg.log', 'a')
             log.write('\n\n\n')
@@ -193,7 +181,7 @@ def startDQM(run, startLumi, paramDB, logFile):
         commonOptions = 'runNumber={run} runInputDir={inputDir} workflow=/{dataset}/{period}/MiniDAQ'.format(run = run, inputDir = '/dqmminidaq', dataset = workflowBase, period = config.period)
 
         if ecalIn:
-            ecalOptions = 'environment=PrivLive outputPath={outputPath} verbosity=1'.format(outputPath = config.tmpoutdir)
+            ecalOptions = 'environment=PrivLive outputPath={outputPath} verbosity=0'.format(outputPath = config.tmpoutdir)
             
             log = open(config.logdir + '/ecalcalib_dqm_sourceclient-privlive_cfg.log', 'a')
             log.write('\n\n\n')
@@ -277,13 +265,15 @@ def runLoop(currentRun, startLumi, logFile, ecalCondDB, runParamDB, isLatestRun)
 
     if not ecalIn and not esIn:
         logFile.write('ECAL not in the run')
-        return WAIT
+        return NEXT
 
     daq = runParamDB.getDAQType(currentRun)
 
+    logFile.write('DAQ type: ', daq)
+
     if daq == 'central':
         copyDaemon = GlobalRunFileCopyDaemon(currentRun, startLumi, '/tmp/onlineDQM', [('fu-c2f13-39-01', '/fff/BU0/ramdisk', 'DQM', 'mrg-c2f13-35-01'), ('bu-c2f13-27-01', '/store/lustre/mergeMacro', 'Calibration', 'StorageManager')], logFile)
-        if len(copyDaemon.files) == 0:
+        if len(copyDaemon.allLumis) == 0:
             logFile.write('No files to be copied.')
             return WAIT
 
@@ -291,10 +281,16 @@ def runLoop(currentRun, startLumi, logFile, ecalCondDB, runParamDB, isLatestRun)
         copyThread = threading.Thread(target = GlobalRunFileCopyDaemon.start, args = (copyDaemon,))
         copyThread.start()
 
-    procs = startDQM(currentRun, startLumi, runParamDB, logFile)
+    dqmRunKey = runParamDB.getRunParameter(currentRun, 'CMS.LVL0:DQM_RUNKEY_AT_CONFIGURE').lower()
+
+    logFile.write('DQM key: ', dqmRunKey if dqmRunKey else 'Undefined')
+
+    procs = startDQM(currentRun, startLumi, daq, dqmRunKey, ecalIn, esIn, logFile)
 
     if len(procs) == 0:
         logFile.write('No CMSSW job to execute')
+        if daq == 'central':
+            copyDaemon.stop()
         return WAIT
 
     if daq == 'central':
@@ -303,21 +299,22 @@ def runLoop(currentRun, startLumi, logFile, ecalCondDB, runParamDB, isLatestRun)
         runDir = '/dqmminidaq/run%d' % currentRun
 
     if not isLatestRun:
-        open(runDir + '/run%d_ls0000_EoR.jsn' % currentRun).close()
+        open(runDir + '/run%d_ls0000_EoR.jsn' % currentRun, 'w').close()
 
     results = {}
 
-    while size(results) != size(procs):
-        if isLatestRun and currentRun < runParamDB.getLatestRun():
-            open(runDir + '/run%d_ls0000_EoR.jsn' % currentRun).close()
+    while len(results) != len(procs):
+        if isLatestRun and currentRun < runParamDB.getLatestEcalRun():
+            open(runDir + '/run%d_ls0000_EoR.jsn' % currentRun, 'w').close()
 
-        for pname, (proc, log) in procs.values():
+        for pname, (proc, log) in procs.items():
             status = checkProcess(proc)
             if status != RUNNING:
                 results[pname] = status
                 log.close()
 
     if daq == 'central':
+        copyDaemon.stop()
         copyThread.join()
     
     if FAILED not in results.values():
@@ -358,28 +355,31 @@ if __name__ == '__main__':
     (options, args) = parser.parse_args()
 
     try:
-        currentRun = int(args[0])
-        isLatestRun = currentRun == runParamDB.getLatestRun()
-    except:
-        currentRun = runParamDB.getLatestRun()
-        isLatestRun = True
-
-    try:
-        startLumi = int(args[1])
-    except:
-        startLumi = 0
-
-    try:
-        os.rename(config.logdir + '/reprocess.log', config.logdir + '/old/reprocess.log')
-    except OSError:
-        pass
-
-    try:
-        logFile = Logger(config.logdir + '/onlineDQM.log')
-        logFile.write('ECAL Online DQM')
-
         runParamDB = RunParameterDB(config.dbread.dbName, config.dbread.dbUserName, config.dbread.dbPassword)
         ecalCondDB = EcalCondDB(config.dbwrite.dbName, config.dbwrite.dbUserName, config.dbwrite.dbPassword)
+
+        latest = runParamDB.getLatestEcalRun()
+    
+        try:
+            currentRun = int(args[0])
+            if currentRun > latest: currentRun = latest
+        except:
+            currentRun = latest
+
+        isLatestRun = currentRun == latest
+    
+        try:
+            startLumi = int(args[1])
+        except:
+            startLumi = 0
+    
+        try:
+            os.rename(config.logdir + '/reprocess.log', config.logdir + '/old/reprocess.log')
+        except OSError:
+            pass
+
+        logFile = Logger(config.logdir + '/onlineDQM.log', 'w')
+        logFile.write('ECAL Online DQM')
 
         while True:
             logFile.write('')
@@ -390,14 +390,17 @@ if __name__ == '__main__':
             if options.reprocess:
                 break
 
-            isLatestRun = currentRun == runParamDB.getLatestRun()
-            
-            while action == WAIT or currentRun == runParamDB.getLatestRun():
-                action = NEXT
+            if action == WAIT:
                 time.sleep(60)
+            else:
+                while currentRun == runParamDB.getLatestEcalRun():
+                    isLatestRun = True
+                    time.sleep(60)
 
-            currentRun += 1
-            startLumi = 0
+                currentRun += 1
+                startLumi = 0
+
+        logFile.close()
 
     except:
         raise
@@ -405,4 +408,3 @@ if __name__ == '__main__':
     finally:
         runParamDB.close()
         ecalCondDB.close()
-        logFile.close()
