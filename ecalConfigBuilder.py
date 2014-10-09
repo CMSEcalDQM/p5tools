@@ -358,13 +358,16 @@ def buildEcalDQMModules(process, options):
 
     process.MessageLogger = cms.Service("MessageLogger",
         destinations = cms.untracked.vstring('cerr', 'cout'),
-        categories = cms.untracked.vstring('EcalDQM'),
+        categories = cms.untracked.vstring('EcalDQM', 'EcalLaserDbService'),
         cerr = cms.untracked.PSet(
             threshold = cms.untracked.string("WARNING"),
             noLineBreaks = cms.untracked.bool(True),
             noTimeStamps = cms.untracked.bool(True),
             default = cms.untracked.PSet(
                 limit = cms.untracked.int32(-1)
+            ),
+            EcalLaserDbService = cms.untracked.PSet(
+                limit = cms.untracked.int32(10)
             )
         ),
         cout = cms.untracked.PSet(
