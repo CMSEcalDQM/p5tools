@@ -118,7 +118,7 @@ def buildEcalDQMModules(process, options):
         if isSource:
             process.load("DQM.EcalMonitorTasks.EcalMonitorTask_cfi")
             if live:
-                process.ecalMonitorTask.workers = ["ClusterTask", "EnergyTask", "IntegrityTask", "OccupancyTask", "RawDataTask", "TimingTask", "TrigPrimTask", "PresampleTask", "SelectiveReadoutTask"]
+                process.ecalMonitorTask.workers = ["ClusterTask", "EnergyTask", "IntegrityTask", "OccupancyTask", "RawDataTask", "TimingTask", "TrigPrimTask", "PresampleTask", "SelectiveReadoutTask", "DigiTask"]
                 process.ecalMonitorTask.workerParameters.TrigPrimTask.params.runOnEmul = True
                 process.ecalMonitorTask.collectionTags.Source = options.rawDataCollection
                 process.ecalMonitorTask.verbosity = verbosity
@@ -145,9 +145,15 @@ def buildEcalDQMModules(process, options):
 
     elif calib:
         from DQM.EcalCommon.CommonParams_cfi import ecaldqmLaserWavelengths, ecaldqmMGPAGains, ecaldqmMGPAGainsPN
-        ecaldqmLaserWavelengths = options.laserWavelengths
-        ecaldqmMGPAGains = options.MGPAGains
-        ecaldqmMGPAGainsPN = options.MGPAGainsPN
+        for wl in options.laserWavelengths:
+            if wl not in ecaldqmLaserWavelengths:
+                ecaldqmLaserWavelengths.append(wl)
+        for gain in options.MGPAGains:
+            if gain not in ecaldqmMGPAGains:
+                ecaldqmMGPAGains.append(gain)
+        for gain in options.MGPAGainsPN:
+            if gain not in ecaldqmMGPAGainsPN:
+                ecaldqmMGPAGainsPN.append(gain)
 
         if isSource:
             process.load("DQM.EcalMonitorTasks.EcalCalibMonitorTasks_cfi")
@@ -343,7 +349,7 @@ def buildEcalDQMModules(process, options):
     )
 
     process.MessageLogger = cms.Service("MessageLogger",
-        destinations = cms.untracked.vstring('cerr'),
+        destinations = cms.untracked.vstring('cerr', 'cout'),
         categories = cms.untracked.vstring('EcalDQM'),
         cerr = cms.untracked.PSet(
             threshold = cms.untracked.string("WARNING"),
@@ -351,6 +357,15 @@ def buildEcalDQMModules(process, options):
             noTimeStamps = cms.untracked.bool(True),
             default = cms.untracked.PSet(
                 limit = cms.untracked.int32(-1)
+            )
+        ),
+        cout = cms.untracked.PSet(
+            threshold = cms.untracked.string('INFO'),
+            EcalDQM = cms.untracked.PSet(
+                limit = cms.untracked.int32(-1)
+            ),
+            default = cms.untracked.PSet(
+                limit = cms.untracked.int32(0)
             )
         )
     )
@@ -362,7 +377,7 @@ def buildEcalDQMModules(process, options):
         if not central:
             process.source.endOfRunKills = False
         if calib:
-            process.source.streamLabel = 'streamDQMCalibration'
+            process.source.streamLabel = 'streamCalibration'
         else:
             process.source.streamLabel = 'streamDQM'
 
@@ -787,10 +802,15 @@ if __name__ == '__main__':
         if 'Live' in options.environment:
             if len(options.inputFiles) < 2:
                 options.inputFiles = ['', 0]
-    
-        options.laserWavelengths = map(int, options.laserWavelengths.split(','))
-        options.MGPAGains = map(int, options.MGPAGains.split(','))
-        options.MGPAGainsPN = map(int, options.MGPAGainsPN.split(','))
+
+        if options.environment == 'CMSLive':
+            options.laserWavelengths = [1, 2, 3]
+            options.MGPAGains = [12]
+            options.MGPAGainsPN = [16]
+        else:
+            options.laserWavelengths = map(int, options.laserWavelengths.split(','))
+            options.MGPAGains = map(int, options.MGPAGains.split(','))
+            options.MGPAGainsPN = map(int, options.MGPAGainsPN.split(','))
 
         if not options.rawDataCollection:
             if (options.environment == 'CMSLive' or options.environment == 'PrivLive') and options.cfgType == 'Calibration':
@@ -803,7 +823,7 @@ if __name__ == '__main__':
         buildEcalDQMModules(generator, options)
 
         buildEcalDQMSequences(generator._cmsObject, options)
-    
+
         # write cfg file
         fileName = options.file
         if not fileName:
@@ -909,22 +929,24 @@ if options.outputFile:
         options.register("workflow", default = "", mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = "offline workflow")
         options.register("useGEDClusters", default = False, mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.bool, info = 'switch for GED clusters')
         options.register("calibType", default = "", mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = "ECAL run type")
-        options.register("laserWavelengths", default = '1, 2, 3, 4', mult = VarParsing.multiplicity.list, mytype = VarParsing.varType.int, info = "Laser wavelengths")
-        options.register("MGPAGains", default = '1, 6, 12', mult = VarParsing.multiplicity.list, mytype = VarParsing.varType.int, info = "MGPA gains")
-        options.register("MGPAGainsPN", default = '1, 16', mult = VarParsing.multiplicity.list, mytype = VarParsing.varType.int, info = "PN MGPA gains")
+        options.register("laserWavelengths", mult = VarParsing.multiplicity.list, mytype = VarParsing.varType.int, info = "Laser wavelengths")
+        options.register("MGPAGains", mult = VarParsing.multiplicity.list, mytype = VarParsing.varType.int, info = "MGPA gains")
+        options.register("MGPAGainsPN", mult = VarParsing.multiplicity.list, mytype = VarParsing.varType.int, info = "PN MGPA gains")
         options.register('prescaleFactor', default = 1, mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.int, info = 'Prescale factor')
         options.register('runkey', default = 'pp_run', mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = 'Run Keys of CMS')
         options.register('collector', default = "", mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = 'Collector configuration (host:port)')
         options.register('verbosity', default = 0, mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.int, info = 'ECAL DQM verbosity')
-    
-        options.clearList('laserWavelengths')
-        options.clearList('MGPAGains')
-        options.clearList('MGPAGainsPN')
-        options.setDefault('laserWavelengths', '1, 2, 3, 4')
-        options.setDefault('MGPAGains', '1, 6, 12')
-        options.setDefault('MGPAGainsPN', '1, 16')
-    
+
         options.parseArguments()
+
+        if options.environment == 'CMSLive':
+            for wl in [1, 2, 3]: options.laserWavelengths.append(wl)
+            options.MGPAGains.append(12)
+            options.MGPAGainsPN.append(16)
+        else:
+            for wl in [1, 2, 3, 4]: options.laserWavelengths.append(wl)
+            for gain in [1, 6, 12]: options.MGPAGains.append(gain)
+            for gain in [1, 16]: options.MGPAGainsPN.append(gain)
 
         sys.argv = sys.argv[:2]
         sys.argv += onlineSourceArgs
