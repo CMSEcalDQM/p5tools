@@ -129,6 +129,8 @@ def buildEcalDQMModules(process, options):
                 process.ecalMonitorTask.collectionTags.EBSuperCluster = "correctedHybridSuperClusters"
                 process.ecalMonitorTask.collectionTags.EESuperCluster = "multi5x5SuperClusters:multi5x5EndcapSuperClusters"
 
+            process.ecalMonitorTask.collectionTags.EBUncalibRecHit = "ecalGlobalUncalibRecHit:EcalUncalibRecHitsEB"
+            process.ecalMonitorTask.collectionTags.EEUncalibRecHit = "ecalGlobalUncalibRecHit:EcalUncalibRecHitsEE"
             process.ecalMonitorTask.collectionTags.TrigPrimEmulDigi = 'simEcalTriggerPrimitiveDigis'
 
             if options.outputMode != 2:
