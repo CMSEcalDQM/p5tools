@@ -118,7 +118,7 @@ def buildEcalDQMModules(process, options):
         if isSource:
             process.load("DQM.EcalMonitorTasks.EcalMonitorTask_cfi")
             if live:
-                process.ecalMonitorTask.workers = ["ClusterTask", "EnergyTask", "IntegrityTask", "OccupancyTask", "RawDataTask", "TimingTask", "TrigPrimTask", "PresampleTask", "SelectiveReadoutTask", "DigiTask"]
+                process.ecalMonitorTask.workers = ["ClusterTask", "EnergyTask", "IntegrityTask", "OccupancyTask", "RawDataTask", "TimingTask", "TrigPrimTask", "PresampleTask", "SelectiveReadoutTask"]
                 process.ecalMonitorTask.workerParameters.TrigPrimTask.params.runOnEmul = True
                 process.ecalMonitorTask.collectionTags.Source = options.rawDataCollection
                 process.ecalMonitorTask.verbosity = verbosity
