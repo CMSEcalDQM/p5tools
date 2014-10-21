@@ -298,14 +298,15 @@ def runLoop(currentRun, startLumi, logFile, ecalCondDB, runParamDB, isLatestRun)
     else:
         runDir = '/dqmminidaq/run%d' % currentRun
 
-    if not isLatestRun:
-        open(runDir + '/run%d_ls0000_EoR.jsn' % currentRun, 'w').close()
-
     results = {}
 
     while len(results) != len(procs):
-        if isLatestRun and currentRun < runParamDB.getLatestEcalRun():
-            open(runDir + '/run%d_ls0000_EoR.jsn' % currentRun, 'w').close()
+        if isLatestRun:
+            if currentRun < runParamDB.getLatestEcalRun():
+                open(runDir + '/run%d_ls0000_EoR.jsn' % currentRun, 'w').close()
+        else:
+            if daq == 'central' and not copyThread.isAlive():
+                open(runDir + '/run%d_ls0000_EoR.jsn' % currentRun, 'w').close()
 
         for pname, (proc, log) in procs.items():
             status = checkProcess(proc)
@@ -353,6 +354,11 @@ if __name__ == '__main__':
     parser.add_option('-w', '--write-database', dest = 'writeDatabase', action = 'store_true', help = 'Write to database in reprocess. DB writing is automatic for online DQM.')
 
     (options, args) = parser.parse_args()
+
+    # close stdio so this can run as daemon
+    sys.stdout.close()
+    sys.stderr.close()
+    sys.stdin.close()
 
     try:
         runParamDB = RunParameterDB(config.dbread.dbName, config.dbread.dbUserName, config.dbread.dbPassword)
