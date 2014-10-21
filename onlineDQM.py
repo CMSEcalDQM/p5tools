@@ -275,7 +275,10 @@ def runLoop(currentRun, startLumi, logFile, ecalCondDB, runParamDB, isLatestRun)
         copyDaemon = GlobalRunFileCopyDaemon(currentRun, startLumi, '/tmp/onlineDQM', [('fu-c2f13-39-01', '/fff/BU0/ramdisk', 'DQM', 'mrg-c2f13-35-01'), ('bu-c2f13-27-01', '/store/lustre/mergeMacro', 'Calibration', 'StorageManager')], logFile)
         if len(copyDaemon.allLumis) == 0:
             logFile.write('No files to be copied.')
-            return WAIT
+            if isLatestRun:
+                return WAIT
+            else:
+                return NEXT
 
         logFile.write('Starting file copy daemon')
         copyThread = threading.Thread(target = GlobalRunFileCopyDaemon.start, args = (copyDaemon,))
