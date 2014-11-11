@@ -390,8 +390,6 @@ def buildEcalDQMModules(process, options):
             process.source.endOfRunKills = False
         if calib:
             process.source.streamLabel = 'streamDQMCalibration'
-        else:
-            process.source.streamLabel = 'streamDQM'
 
     else:
         if '.dat' in options.inputFiles[0]:
