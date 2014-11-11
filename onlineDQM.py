@@ -10,7 +10,7 @@ from ecaldqmconfig import config
 from conddb import EcalCondDB, RunParameterDB
 from logger import Logger
 
-VERBOSITY = 1
+VERBOSITY = 0
 
 class GlobalRunFileCopyDaemon(object):
     # TEMPORARY SOLUTION (SEE BELOW)

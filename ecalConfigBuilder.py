@@ -143,7 +143,9 @@ def buildEcalDQMModules(process, options):
             process.ecalMonitorClient.verbosity = verbosity
             if live:
                 process.ecalMonitorClient.workers = ["IntegrityClient", "OccupancyClient", "PresampleClient", "RawDataClient", "TimingClient", "SelectiveReadoutClient", "TrigPrimClient", "SummaryClient"]
-                process.ecalMonitorClient.workerParameters.SummaryClient.params.activeSources = ["Integrity", "RawData", "Presample", "TriggerPrimitives", "Timing", "HotCell"]
+#                process.ecalMonitorClient.workerParameters.SummaryClient.params.activeSources = ["Integrity", "RawData", "Presample", "TriggerPrimitives", "Timing", "HotCell"]
+# removing Timing from the list of summary client sources during commissioning & until DQM can do run-typing
+                process.ecalMonitorClient.workerParameters.SummaryClient.params.activeSources = ["Integrity", "RawData", "Presample", "TriggerPrimitives", "HotCell"]
 
                 process.ecalMonitorClient.commonParameters.onlineMode = True
 
