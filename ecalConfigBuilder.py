@@ -56,6 +56,8 @@ def buildEcalDQMModules(process, options):
             process.load("RecoLocalCalo.EcalRecProducers.ecalGlobalUncalibRecHit_cfi")
             process.load("RecoLocalCalo.EcalRecProducers.ecalDetIdToBeRecovered_cfi")
             process.load("RecoLocalCalo.EcalRecProducers.ecalRecHit_cfi")
+            process.ecalRecHit.EBuncalibRecHitCollection = "ecalGlobalUncalibRecHit:EcalUncalibRecHitsEB"
+            process.ecalRecHit.EEuncalibRecHitCollection = "ecalGlobalUncalibRecHit:EcalUncalibRecHitsEE"
             process.load("RecoLocalCalo.EcalRecAlgos.EcalSeverityLevelESProducer_cfi")
             process.load("CalibCalorimetry.EcalLaserCorrection.ecalLaserCorrectionService_cfi")
     
@@ -174,6 +176,9 @@ def buildEcalDQMModules(process, options):
                 process.load("DQM.EcalMonitorTasks.EcalMonitorTask_cfi")
                 process.ecalMonitorTask.workers = ["IntegrityTask", "RawDataTask"]
                 process.ecalMonitorTask.collectionTags.Source = options.rawDataCollection
+
+            process.ecalLaserLedMonitorTask.collectionTags.EBLaserLedUncalibRecHit = 'ecalLaserLedUncalibRecHit:EcalUncalibRecHitsEB'
+            process.ecalLaserLedMonitorTask.collectionTags.EELaserLedUncalibRecHit = 'ecalLaserLedUncalibRecHit:EcalUncalibRecHitsEE'
 
         if isClient:
             process.load("DQM.EcalMonitorClient.EcalCalibMonitorClient_cfi")
@@ -297,28 +302,29 @@ def buildEcalDQMModules(process, options):
         if physics:
             process.ecalPhysicsFilter = cms.EDFilter("EcalMonitorPrescaler",
                 EcalRawDataCollection = cms.InputTag("ecalDigis"),
-                clusterPrescaleFactor = cms.untracked.int32(1)
+                physics = cms.untracked.uint32(1),
+                cosmics = cms.untracked.uint32(1)
             )
         elif calib:
             process.ecalCalibrationFilter = cms.EDFilter("EcalMonitorPrescaler",
                 EcalRawDataCollection = cms.InputTag("ecalDigis"),
-                laserPrescaleFactor = cms.untracked.int32(1),
-                ledPrescaleFactor = cms.untracked.int32(1),
-                pedestalPrescaleFactor = cms.untracked.int32(1),
-                testpulsePrescaleFactor = cms.untracked.int32(1)
+                laser = cms.untracked.uint32(1),
+                led = cms.untracked.uint32(1),
+                pedestal = cms.untracked.uint32(1),
+                testpulse = cms.untracked.uint32(1)
             )
             process.ecalLaserLedFilter = cms.EDFilter("EcalMonitorPrescaler",
                 EcalRawDataCollection = cms.InputTag("ecalDigis"),
-                laserPrescaleFactor = cms.untracked.int32(1),
-                ledPrescaleFactor = cms.untracked.int32(1)
+                laser = cms.untracked.uint32(1),
+                led = cms.untracked.uint32(1)
             )
             process.ecalTestPulseFilter = cms.EDFilter("EcalMonitorPrescaler",
                 EcalRawDataCollection = cms.InputTag("ecalDigis"),
-                testpulsePrescaleFactor = cms.untracked.int32(1)
+                testpulse = cms.untracked.uint32(1)
             )
             process.ecalPedestalFilter = cms.EDFilter("EcalMonitorPrescaler",
                 EcalRawDataCollection = cms.InputTag("ecalDigis"),
-                pedestalPrescaleFactor = cms.untracked.int32(1)
+                pedestal = cms.untracked.uint32(1)
             )
 
   
@@ -390,7 +396,7 @@ def buildEcalDQMModules(process, options):
         if not central:
             process.source.endOfRunKills = False
         if calib:
-            process.source.streamLabel = 'streamCalibration'
+            process.source.streamLabel = 'streamDQMCalibration'
         else:
             process.source.streamLabel = 'streamDQM'
 

@@ -10,6 +10,8 @@ from ecaldqmconfig import config
 from conddb import EcalCondDB, RunParameterDB
 from logger import Logger
 
+VERBOSITY = 1
+
 class GlobalRunFileCopyDaemon(object):
     # TEMPORARY SOLUTION (SEE BELOW)
     def __init__(self, run, startLumi, runInputDir, sources, logFile):
@@ -45,15 +47,7 @@ class GlobalRunFileCopyDaemon(object):
 
         for node, directory, stream, suffix in self.sources:
             proc = subprocess.Popen('ssh {node} "ls {rundir}/run{run}/run{run}_ls*.jsn"'.format(node = node, rundir = directory, run = self.run), shell = True, stdout = subprocess.PIPE, stderr = subprocess.STDOUT)
-            data = ''
-            while proc.poll() is None:
-                data += proc.communicate()[0]
-                time.sleep(2)
-    
-            try:
-                data += proc.communicate()[0]
-            except:
-                pass
+            data = proc.communicate()[0]
     
             if proc.poll() != 0:
                 return
@@ -70,21 +64,12 @@ class GlobalRunFileCopyDaemon(object):
             
             proc = subprocess.Popen(['scp', '%s:%s/run%d/' % (node, directory, self.run) + jsnFile.replace('jsn', '*'), self.targetDir], stdout = subprocess.PIPE, stderr = subprocess.STDOUT)
             try:
-                while proc.poll() is None:
-                    proc.communicate()
-                    time.sleep(2)
+                proc.communicate()
     
             except KeyboardInterrupt:
                 proc.terminate()
-                while proc.poll() is None:
-                    proc.communicate()
-                    time.sleep(1)
-                raise
-
-            try:
                 proc.communicate()
-            except:
-                pass
+                raise
 
             self.logFile.write('Copied ' + jsnFile + ' from ' + node)
 
@@ -149,7 +134,7 @@ def startDQM(run, startLumi, daq, dqmRunKey, ecalIn, esIn, logFile):
         commonOptions = 'runNumber={run} runInputDir={inputDir} workflow=/{dataset}/{period}/CentralDAQ'.format(run = run, inputDir = '/tmp/onlineDQM', dataset = workflowBase, period = config.period)
 
         if ecalIn:
-            ecalOptions = 'environment=PrivLive outputPath={outputPath} verbosity=0'.format(outputPath = config.tmpoutdir)
+            ecalOptions = 'environment=PrivLive outputPath={outputPath} verbosity={verbosity}'.format(outputPath = config.tmpoutdir, verbosity = VERBOSITY)
 
             log = open(config.logdir + '/ecal_dqm_sourceclient-privlive_cfg.log', 'a')
             log.write('\n\n\n')
@@ -181,7 +166,7 @@ def startDQM(run, startLumi, daq, dqmRunKey, ecalIn, esIn, logFile):
         commonOptions = 'runNumber={run} runInputDir={inputDir} workflow=/{dataset}/{period}/MiniDAQ'.format(run = run, inputDir = '/dqmminidaq', dataset = workflowBase, period = config.period)
 
         if ecalIn:
-            ecalOptions = 'environment=PrivLive outputPath={outputPath} verbosity=0'.format(outputPath = config.tmpoutdir)
+            ecalOptions = 'environment=PrivLive outputPath={outputPath} verbosity={verbosity}'.format(outputPath = config.tmpoutdir, verbosity = VERBOSITY)
             
             log = open(config.logdir + '/ecalcalib_dqm_sourceclient-privlive_cfg.log', 'a')
             log.write('\n\n\n')
@@ -272,7 +257,7 @@ def runLoop(currentRun, startLumi, logFile, ecalCondDB, runParamDB, isLatestRun)
     logFile.write('DAQ type: ', daq)
 
     if daq == 'central':
-        copyDaemon = GlobalRunFileCopyDaemon(currentRun, startLumi, '/tmp/onlineDQM', [('fu-c2f13-39-01', '/fff/BU0/ramdisk', 'DQM', 'mrg-c2f13-35-01'), ('bu-c2f13-27-01', '/store/lustre/mergeMacro', 'Calibration', 'StorageManager')], logFile)
+        copyDaemon = GlobalRunFileCopyDaemon(currentRun, startLumi, '/tmp/onlineDQM', [('fu-c2f13-39-01', '/fff/BU0/ramdisk', 'DQM', 'mrg-c2f13-35-01'), ('fu-c2f13-39-01', '/fff/BU0/ramdisk', 'DQMCalibration', 'mrg-c2f13-35-01')], logFile)
         if len(copyDaemon.allLumis) == 0:
             logFile.write('No files to be copied.')
             if isLatestRun:
