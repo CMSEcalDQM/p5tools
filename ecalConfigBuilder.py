@@ -306,13 +306,6 @@ def buildEcalDQMModules(process, options):
                 cosmics = cms.untracked.uint32(1)
             )
         elif calib:
-            process.ecalCalibrationFilter = cms.EDFilter("EcalMonitorPrescaler",
-                EcalRawDataCollection = cms.InputTag("ecalDigis"),
-                laser = cms.untracked.uint32(1),
-                led = cms.untracked.uint32(1),
-                pedestal = cms.untracked.uint32(1),
-                testpulse = cms.untracked.uint32(1)
-            )
             process.ecalLaserLedFilter = cms.EDFilter("EcalMonitorPrescaler",
                 EcalRawDataCollection = cms.InputTag("ecalDigis"),
                 laser = cms.untracked.uint32(1),
@@ -320,7 +313,7 @@ def buildEcalDQMModules(process, options):
             )
             process.ecalTestPulseFilter = cms.EDFilter("EcalMonitorPrescaler",
                 EcalRawDataCollection = cms.InputTag("ecalDigis"),
-                testpulse = cms.untracked.uint32(1)
+                testPulse = cms.untracked.uint32(1)
             )
             process.ecalPedestalFilter = cms.EDFilter("EcalMonitorPrescaler",
                 EcalRawDataCollection = cms.InputTag("ecalDigis"),
@@ -597,13 +590,8 @@ def buildEcalDQMSequences(process, options):
 
         elif calib:    
             process.ecalClientPath = cms.Path(
-                process.ecalPreRecoSequence +
                 process.ecalCalibMonitorClient
             )
-
-            if live:
-                process.ecalClientPath.insert(1, process.ecalCalibrationFilter)
-                process.ecalClientPath.insert(0, process.preScaler)
 
             paths.append(process.ecalClientPath)
 
