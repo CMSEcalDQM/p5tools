@@ -58,7 +58,9 @@ class GlobalRunFileCopyDaemon(object):
             for filename in fullPaths:
                 matches = re.search('run%d_ls([0-9]+)_.*[.]jsn$' % self.run, filename)
                 if not matches: continue
-                self.allLumis.add(int(matches.group(1)))
+                lumi = int(matches.group(1))
+                if lumi >= self.startLumi:
+                    self.allLumis.add(int(matches.group(1)))
 
             for filename in fullPaths:
                 matches = re.search('run%d_ls([0-9]+)_.*[.]dat[.]deleted$' % self.run, filename)
@@ -348,6 +350,10 @@ def runLoop(currentRun, startLumi, logFile, ecalCondDB, runParamDB, isLatestRun)
 if __name__ == '__main__':
 
     import sys
+    # close stdio so this can run as daemon
+    sys.stdout.close()
+    sys.stderr.close()
+    sys.stdin.close()
     from optparse import OptionParser
 
     parser = OptionParser(usage = 'Usage: onlineDQM.py [-r [-w]] startRun [startLumi]')
@@ -356,11 +362,6 @@ if __name__ == '__main__':
     parser.add_option('-w', '--write-database', dest = 'writeDatabase', action = 'store_true', help = 'Write to database in reprocess. DB writing is automatic for online DQM.')
 
     (options, args) = parser.parse_args()
-
-    # close stdio so this can run as daemon
-    sys.stdout.close()
-    sys.stderr.close()
-    sys.stdin.close()
 
     try:
         runParamDB = RunParameterDB(config.dbread.dbName, config.dbread.dbUserName, config.dbread.dbPassword)
