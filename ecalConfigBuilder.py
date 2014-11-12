@@ -389,7 +389,8 @@ def buildEcalDQMModules(process, options):
     if live:
         process.load("DQM.Integration.test.inputsource_cfi")  # input source uses VarParsing (Jul 2 2014)
         if not central:
-            process.source.endOfRunKills = False
+            pass
+#            process.source.endOfRunKills = False
         if calib:
             process.source.streamLabel = 'streamDQMCalibration'
 

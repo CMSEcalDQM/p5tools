@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 import subprocess
 import threading
@@ -107,6 +108,9 @@ class GlobalRunFileCopyDaemon(object):
             EOR = (len(lumis) == 0 or lumis[0] == 0)
 
             for lumi in lumis:
+                if self._stop.isSet():
+                    break
+
                 if lumi < self.startLumi:
                     copied.add(lumi)
                     continue
@@ -203,6 +207,7 @@ def startDQM(run, startLumi, daq, dqmRunKey, ecalIn, esIn, logFile):
 
     return procs
 
+
 RUNNING = 0
 SUCCESS = 1
 FAILED = 2
@@ -254,10 +259,12 @@ def writeDB(run, condDB, runParamDB, logFile):
     return SUCCESS
 
 
+UNKNOWN = -1
 WAIT = 0
 NEXT = 1
+KILLED = 2
 
-def runLoop(currentRun, startLumi, logFile, ecalCondDB, runParamDB, isLatestRun):
+def processRun(currentRun, startLumi, logFile, ecalCondDB, runParamDB, isLatestRun, stopFlag, returnValue):
 
     logFile.write('Checking ECAL presence in run', currentRun)
 
@@ -266,7 +273,8 @@ def runLoop(currentRun, startLumi, logFile, ecalCondDB, runParamDB, isLatestRun)
 
     if not ecalIn and not esIn:
         logFile.write('ECAL not in the run')
-        return NEXT
+        returnValue[0] = NEXT
+        return
 
     daq = runParamDB.getDAQType(currentRun)
 
@@ -277,9 +285,10 @@ def runLoop(currentRun, startLumi, logFile, ecalCondDB, runParamDB, isLatestRun)
         if len(copyDaemon.allLumis) == 0:
             logFile.write('No files to be copied.')
             if isLatestRun:
-                return WAIT
+                returnValue[0] = WAIT
             else:
-                return NEXT
+                returnValue[0] = NEXT
+            return
 
         logFile.write('Starting file copy daemon')
         copyThread = threading.Thread(target = GlobalRunFileCopyDaemon.start, args = (copyDaemon,))
@@ -295,7 +304,9 @@ def runLoop(currentRun, startLumi, logFile, ecalCondDB, runParamDB, isLatestRun)
         logFile.write('No CMSSW job to execute')
         if daq == 'central':
             copyDaemon.stop()
-        return WAIT
+
+        returnValue[0] = WAIT
+        return
 
     if daq == 'central':
         runDir = '/tmp/onlineDQM/run%d' % currentRun
@@ -305,6 +316,24 @@ def runLoop(currentRun, startLumi, logFile, ecalCondDB, runParamDB, isLatestRun)
     results = {}
 
     while len(results) != len(procs):
+        if stopFlag.isSet():
+            if daq == 'central':
+                print 'Stopping copy daemon.'
+                copyDaemon.stop()
+                copyThread.join()
+
+            print 'Soft kill DQM processes.'
+            open(runDir + '/run%d_ls0000_EoR.jsn' % currentRun, 'w').close()
+            time.sleep(5)
+            for pname, (proc, log) in procs.items():
+                if proc.poll() is None:
+                    print 'Hard kill', pname
+                    proc.kill()
+                    proc.wait()
+                
+            returnValue[0] = KILLED
+            return
+
         if isLatestRun:
             if currentRun < runParamDB.getLatestEcalRun():
                 open(runDir + '/run%d_ls0000_EoR.jsn' % currentRun, 'w').close()
@@ -321,6 +350,10 @@ def runLoop(currentRun, startLumi, logFile, ecalCondDB, runParamDB, isLatestRun)
     if daq == 'central':
         copyDaemon.stop()
         copyThread.join()
+
+    if stopFlag.isSet():
+        returnValue[0] = KILLED
+        return
     
     if FAILED not in results.values():
         logFile.write('CMSSW job successfully returned.')
@@ -344,16 +377,25 @@ def runLoop(currentRun, startLumi, logFile, ecalCondDB, runParamDB, isLatestRun)
         logFile.write('CMSSW job failed.')
 #                ecalCondDB.setMonRunOutcome(currentRun, 'dqmfail')
 
-    return NEXT
+    returnValue[0] = NEXT
+    return
+
+
+def takeCommands(stopFlag):
+    while True:
+        sys.stdout.write('DQM Control> ')
+        sys.stdout.flush()
+        command = sys.stdin.readline().strip()
+        if command == 'quit':
+            print 'Terminating DQM..'
+            stopFlag.set()
+            return
+        else:
+            print 'Invalid command', command
 
 
 if __name__ == '__main__':
 
-    import sys
-    # close stdio so this can run as daemon
-    sys.stdout.close()
-    sys.stderr.close()
-    sys.stdin.close()
     from optparse import OptionParser
 
     parser = OptionParser(usage = 'Usage: onlineDQM.py [-r [-w]] startRun [startLumi]')
@@ -390,13 +432,24 @@ if __name__ == '__main__':
         logFile = Logger(config.logdir + '/onlineDQM.log', 'w')
         logFile.write('ECAL Online DQM')
 
+        stopFlag = threading.Event()
+
+        controlThread = threading.Thread(target = takeCommands, args = (stopFlag,))
+        controlThread.daemon = True
+        controlThread.start()
+
         while True:
             logFile.write('')
             logFile.write('*** Run ' + str(currentRun) + ' ***')
 
-            action = runLoop(currentRun, startLumi, logFile, ecalCondDB, runParamDB, isLatestRun)
+            returnValue = [UNKNOWN]
+            dqmThread = threading.Thread(target = processRun, args = (currentRun, startLumi, logFile, ecalCondDB, runParamDB, isLatestRun, stopFlag, returnValue))
+            dqmThread.start()
 
-            if options.reprocess:
+            while returnValue[0] == UNKNOWN:
+                dqmThread.join(5)
+
+            if stopFlag.isSet() or options.reprocess:
                 break
 
             if action == WAIT:
