@@ -367,16 +367,16 @@ def buildEcalDQMModules(process, options):
             noLineBreaks = cms.untracked.bool(True),
             noTimeStamps = cms.untracked.bool(True),
             default = cms.untracked.PSet(
-                limit = cms.untracked.int32(-1)
-            ),
-            EcalLaserDbService = cms.untracked.PSet(
-                limit = cms.untracked.int32(10)
+                limit = cms.untracked.int32(0)
             )
         ),
         cout = cms.untracked.PSet(
             threshold = cms.untracked.string('INFO'),
             EcalDQM = cms.untracked.PSet(
                 limit = cms.untracked.int32(-1)
+            ),
+            EcalLaserDbService = cms.untracked.PSet(
+                limit = cms.untracked.int32(10)
             ),
             default = cms.untracked.PSet(
                 limit = cms.untracked.int32(0)

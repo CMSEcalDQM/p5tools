@@ -35,6 +35,7 @@ class GlobalRunFileCopyDaemon(object):
 
         self.updateList()
 
+
     def __del__(self):
         self._stop.set()
         try:
@@ -42,20 +43,31 @@ class GlobalRunFileCopyDaemon(object):
         except:
             pass
 
+
     def updateList(self):
         self.allLumis = set([])
 
         for node, directory, stream, suffix in self.sources:
-            proc = subprocess.Popen('ssh {node} "ls {rundir}/run{run}/run{run}_ls*.jsn"'.format(node = node, rundir = directory, run = self.run), shell = True, stdout = subprocess.PIPE, stderr = subprocess.STDOUT)
+            proc = subprocess.Popen('ssh {node} "ls {rundir}/run{run}/run{run}_ls*"'.format(node = node, rundir = directory, run = self.run), shell = True, stdout = subprocess.PIPE, stderr = subprocess.STDOUT)
             data = proc.communicate()[0]
     
             if proc.poll() != 0:
                 return
 
-            for filename in data.split():
-                matches = re.search('run%d_ls([0-9]+)' % self.run, filename)
+            fullPaths = data.split()
+            for filename in fullPaths:
+                matches = re.search('run%d_ls([0-9]+)_.*[.]jsn$' % self.run, filename)
                 if not matches: continue
                 self.allLumis.add(int(matches.group(1)))
+
+            for filename in fullPaths:
+                matches = re.search('run%d_ls([0-9]+)_.*[.]dat[.]deleted$' % self.run, filename)
+                if not matches: continue
+                try:
+                    self.allLumis.remove(int(matches.group(1)))
+                except:
+                    pass
+
 
     def copy(self, lumi):
         for node, directory, stream, suffix in self.sources:
@@ -71,9 +83,11 @@ class GlobalRunFileCopyDaemon(object):
                 proc.communicate()
                 raise
 
-            self.logFile.write('Copied ' + jsnFile + ' from ' + node)
+            if proc.returncode == 0:
+                self.logFile.write('Copied ' + jsnFile + ' from ' + node)
+            else:
+                self.logFile.write('Failed to copy ' + jsnFile + ' from ' + node)
 
-        return proc.returncode == 0
 
     def start(self):
         copied = set([])
@@ -95,8 +109,8 @@ class GlobalRunFileCopyDaemon(object):
                     copied.add(lumi)
                     continue
 
-                if self.copy(lumi):
-                    copied.add(lumi)
+                self.copy(lumi)
+                copied.add(lumi)
     
             if EOR:
                 break
@@ -336,7 +350,7 @@ if __name__ == '__main__':
     import sys
     from optparse import OptionParser
 
-    parser = OptionParser(usage = 'Usage: onlineDQM.py [-r [-w]] startRun')
+    parser = OptionParser(usage = 'Usage: onlineDQM.py [-r [-w]] startRun [startLumi]')
 
     parser.add_option('-r', '--reprocess', dest = 'reprocess', action = 'store_true', help = 'Reprocess a run instead of running as daemon.')
     parser.add_option('-w', '--write-database', dest = 'writeDatabase', action = 'store_true', help = 'Write to database in reprocess. DB writing is automatic for online DQM.')
