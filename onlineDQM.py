@@ -19,9 +19,9 @@ class GlobalRunFileCopyDaemon(object):
         self.run = run
         self.startLumi = startLumi
         self.targetDir = runInputDir + '/run%s' % run
-        self.sources = sources # [(node, dir, stream, suffix), ..]
+        self.sources = sources # {stream: (node, dir, suffix), ..}
         self._stop = threading.Event()
-        self.allLumis = set([])
+        self.allLumis = dict([(stream, set([])) for stream in self.sources.keys()])
         self.logFile = logFile
 
         try:
@@ -30,7 +30,7 @@ class GlobalRunFileCopyDaemon(object):
             pass
 
         try:
-            os.mkdir(self.targetDir)
+            os.makedirs(self.targetDir)
         except OSError:
             pass
 
@@ -46,9 +46,9 @@ class GlobalRunFileCopyDaemon(object):
 
 
     def updateList(self):
-        self.allLumis = set([])
+        for stream, (node, directory, suffix) in self.sources.items():
+            self.allLumis[stream].clear()
 
-        for node, directory, stream, suffix in self.sources:
             proc = subprocess.Popen('ssh {node} "ls {rundir}/run{run}/run{run}_ls*"'.format(node = node, rundir = directory, run = self.run), shell = True, stdout = subprocess.PIPE, stderr = subprocess.STDOUT)
             data = proc.communicate()[0]
     
@@ -56,44 +56,47 @@ class GlobalRunFileCopyDaemon(object):
                 return
 
             fullPaths = data.split()
+
+            deleted = []
             for filename in fullPaths:
-                matches = re.search('run%d_ls([0-9]+)_.*[.]jsn$' % self.run, filename)
+                matches = re.search('run{run}_ls([0-9]+)_stream{stream}_{suffix}[.]dat[.]deleted$'.format(run = self.run, stream = stream, suffix = suffix), filename)
+                if matches:
+                    deleted.append(int(matches.group(1)))
+
+            for filename in fullPaths:
+                matches = re.search('run{run}_ls([0-9]+)_stream{stream}_{suffix}[.]jsn$'.format(run = self.run, stream = stream, suffix = suffix), filename)
                 if not matches: continue
                 lumi = int(matches.group(1))
-                if lumi >= self.startLumi:
-                    self.allLumis.add(int(matches.group(1)))
-
-            for filename in fullPaths:
-                matches = re.search('run%d_ls([0-9]+)_.*[.]dat[.]deleted$' % self.run, filename)
-                if not matches: continue
-                try:
-                    self.allLumis.remove(int(matches.group(1)))
-                except:
-                    pass
+                if lumi >= self.startLumi and lumi not in deleted:
+                    self.allLumis[stream].add(lumi)
 
 
-    def copy(self, lumi):
-        for node, directory, stream, suffix in self.sources:
-            jsnFile = 'run%d_ls%04d_stream%s_%s.jsn' % (self.run, lumi, stream, suffix)
-            if os.path.exists(self.targetDir + '/' + jsnFile): return True
-            
-            proc = subprocess.Popen(['scp', '%s:%s/run%d/' % (node, directory, self.run) + jsnFile.replace('jsn', '*'), self.targetDir], stdout = subprocess.PIPE, stderr = subprocess.STDOUT)
-            try:
-                proc.communicate()
-    
-            except KeyboardInterrupt:
-                proc.terminate()
-                proc.communicate()
-                raise
+    def copy(self, stream, lumi):
+        node, directory, suffix = self.sources[stream]
 
-            if proc.returncode == 0:
-                self.logFile.write('Copied ' + jsnFile + ' from ' + node)
-            else:
-                self.logFile.write('Failed to copy ' + jsnFile + ' from ' + node)
+        fileName = 'run%d_ls%04d_stream%s_%s' % (self.run, lumi, stream, suffix)
+
+        if os.path.exists(self.targetDir + '/' + fileName + '.jsn'): return True
+        
+        proc = subprocess.Popen(['scp', '{node}:{directory}/run{run}/'.format(node = node, directory = directory, run = self.run) + fileName + '.dat', self.targetDir], stdout = subprocess.PIPE, stderr = subprocess.STDOUT)
+        proc.communicate()
+
+        proc = subprocess.Popen(['scp', '{node}:{directory}/run{run}/'.format(node = node, directory = directory, run = self.run) + fileName + '.jsn', self.targetDir], stdout = subprocess.PIPE, stderr = subprocess.STDOUT)
+        try:
+            proc.communicate()
+        except KeyboardInterrupt:
+            proc.terminate()
+            proc.communicate()
+            raise
+
+        if proc.returncode == 0:
+            self.logFile.write('Copied ' + fileName + ' from ' + node)
+        else:
+            self.logFile.write('Failed to copy ' + fileName + ' from ' + node)
 
 
     def start(self):
-        copied = set([])
+        copied = dict([(stream, set([])) for stream in self.sources.keys()])
 
         try:
             os.unlink('{rundir}/run{run}/run{run}_ls0000_EoR.jsn'.format(rundir = self.targetDir, run = self.run))
@@ -101,32 +104,39 @@ class GlobalRunFileCopyDaemon(object):
             pass
 
         while True:
-            lumis = sorted(list(self.allLumis - copied))
+            nEnded = 0
+            for stream, allLumis in self.allLumis.items():
+                lumis = sorted(list(allLumis - copied[stream]))
 
-            self.logFile.write('Lumis to copy: ' + str(lumis))
+                if len(lumis) == 0: continue # potentially cause hang-up if EoR is somehow not written..
 
-            EOR = (len(lumis) == 0 or lumis[0] == 0)
+                if lumis[0] == 0:
+                    nEnded += 1
+                    lumis.pop(0)
 
-            for lumi in lumis:
+                self.logFile.write(('Lumis to copy for stream %s: ' % stream) + str(lumis))
+    
+                for lumi in lumis:
+                    if self._stop.isSet():
+                        break
+    
+                    if lumi < self.startLumi:
+                        copied[stream].add(lumi)
+                        continue
+    
+                    self.copy(stream, lumi)
+                    copied[stream].add(lumi)
+    
                 if self._stop.isSet():
                     break
 
-                if lumi < self.startLumi:
-                    copied.add(lumi)
-                    continue
-
-                self.copy(lumi)
-                copied.add(lumi)
-    
-            if EOR:
-                break
-
-            if self._stop.isSet():
+            if nEnded == len(self.allLumis) or self._stop.isSet():
                 break
 
             time.sleep(60)
 
             self.updateList()
+
 
     def stop(self):
         self._stop.set()
@@ -281,8 +291,8 @@ def processRun(currentRun, startLumi, logFile, ecalCondDB, runParamDB, isLatestR
     logFile.write('DAQ type: ', daq)
 
     if daq == 'central':
-        copyDaemon = GlobalRunFileCopyDaemon(currentRun, startLumi, '/tmp/onlineDQM', [('fu-c2f13-39-01', '/fff/BU0/ramdisk', 'DQM', 'mrg-c2f13-35-01'), ('fu-c2f13-39-01', '/fff/BU0/ramdisk', 'DQMCalibration', 'mrg-c2f13-35-01')], logFile)
-        if len(copyDaemon.allLumis) == 0:
+        copyDaemon = GlobalRunFileCopyDaemon(currentRun, startLumi, '/tmp/onlineDQM', {'DQM': ('fu-c2f13-39-01', '/fff/BU0/ramdisk', 'mrg-c2f13-35-01'), 'DQMCalibration': ('fu-c2f13-39-01', '/fff/BU0/ramdisk', 'mrg-c2f13-35-01')}, logFile)
+        if sum(map(len, copyDaemon.allLumis.values())) == 0:
             logFile.write('No files to be copied.')
             if isLatestRun:
                 returnValue[0] = WAIT
@@ -415,7 +425,10 @@ if __name__ == '__main__':
             currentRun = int(args[0])
             if currentRun > latest: currentRun = latest
         except:
+            print 'Run number not specified in command line.'
             currentRun = latest
+
+        print currentRun
 
         isLatestRun = currentRun == latest
     
@@ -452,8 +465,9 @@ if __name__ == '__main__':
             if stopFlag.isSet() or options.reprocess:
                 break
 
-            if action == WAIT:
+            if returnValue[0] == WAIT:
                 time.sleep(60)
+                currentRun = runParamDB.getLatestEcalRun()
             else:
                 while currentRun == runParamDB.getLatestEcalRun():
                     isLatestRun = True

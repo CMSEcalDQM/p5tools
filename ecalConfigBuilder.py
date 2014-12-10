@@ -391,7 +391,7 @@ def buildEcalDQMModules(process, options):
         if not central:
             pass
 #            process.source.endOfRunKills = False
-        if calib:
+        if calib and options.cfgType != 'CalibrationStandalone':
             process.source.streamLabel = 'streamDQMCalibration'
 
     else:
