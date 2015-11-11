@@ -208,7 +208,7 @@ def buildEcalDQMModules(process, options):
         #Need to configure the source for calib summary!!
     elif laser:
         # load laser monitor client
-#        process.ecalLaserMonitorClient.clientParameters.LightChecker.matacqPlotsDir = "/data/ecalod-disk01/dqm-data/laser"
+#        process.ecalLaserMonitorClient.clientParameters.LightChecker.matacqPlotsDir = "/data/dqm-data/laser"
         pass
 
     if options.outputMode == 1 and not isSource and isClient:
@@ -251,7 +251,7 @@ def buildEcalDQMModules(process, options):
     if central:
         referencePath = '/dqmdata/dqm/reference/'
     elif privEcal:
-        referencePath = '/data/ecalod-disk01/dqm-data/online-DQM/'
+        referencePath = '/data/dqm-data/online-DQM/'
     else:
         referencePath = ''
 
@@ -269,7 +269,7 @@ def buildEcalDQMModules(process, options):
             process.dqmSaver.convention = "Offline"
             process.dqmSaver.referenceHandling = "skip"
             process.dqmSaver.workflow = options.workflow
-            process.dqmSaver.dirName = "/data/ecalod-disk01/dqm-data/tmp" 
+            process.dqmSaver.dirName = "/data/dqm-data/tmp" 
             process.dqmSaver.producer = 'DQM'
 
         elif not central:

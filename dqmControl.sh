@@ -10,7 +10,7 @@ if [ $1 = "start" ]; then
 	exit
     fi
 
-    screen -d -m -S onlineDQM $HOME/DQM/p5tools/runOnlineDQM.sh $2 $3
+    screen -d -m -S onlineDQM $HOME/DQM.new/p5tools/runOnlineDQM.sh $2 $3
 
 elif [ $1 = "stop" ]; then
 

@@ -166,14 +166,14 @@ def startDQM(run, startLumi, daq, dqmRunKey, ecalIn, esIn, logFile):
 #
 #            log = open(config.logdir + '/ecal_dqm_sourceclient-privlive_cfg.log', 'a')
 #            log.write('\n\n\n')
-#            command = 'source $HOME/DQM/cmssw.sh; exec cmsRun {conf} {common} {ecal} {spec}'.format(conf = config.workdir + '/ecalConfigBuilder.py', common = commonOptions, ecal = ecalOptions, spec = 'cfgType=Physics')
+#            command = 'source $HOME/DQM.new/cmssw.sh; exec cmsRun {conf} {common} {ecal} {spec}'.format(conf = config.workdir + '/ecalConfigBuilder.py', common = commonOptions, ecal = ecalOptions, spec = 'cfgType=Physics')
 #            proc = subprocess.Popen(command, shell = True, stdout = log, stderr = subprocess.STDOUT)
 #            logFile.write(command)
 #            procs['Physics'] = (proc, log)
     
 #            log = open(config.logdir + '/ecalcalib_dqm_sourceclient-privlive_cfg.log', 'a')
 #            log.write('\n\n\n')
-#            command = 'source $HOME/DQM/cmssw.sh; exec cmsRun {conf} {common} {ecal} {spec}'.format(conf = config.workdir + '/ecalConfigBuilder.py', common = commonOptions, ecal = ecalOptions, spec = 'cfgType=Calibration')
+#            command = 'source $HOME/DQM.new/cmssw.sh; exec cmsRun {conf} {common} {ecal} {spec}'.format(conf = config.workdir + '/ecalConfigBuilder.py', common = commonOptions, ecal = ecalOptions, spec = 'cfgType=Calibration')
 #            proc = subprocess.Popen(command, shell = True, stdout = log, stderr = subprocess.STDOUT)
 #            logFile.write(command)
 #            procs['Calibration'] = (proc, log)
@@ -181,7 +181,7 @@ def startDQM(run, startLumi, daq, dqmRunKey, ecalIn, esIn, logFile):
         if esIn:
             log = open(config.logdir + '/es_dqm_sourceclient-privlive_cfg.log', 'a')
             log.write('\n\n\n')
-            command = 'source $HOME/DQM/cmssw.sh; exec cmsRun {conf} {common}'.format(conf = config.workdir + '/es_dqm_sourceclient-privlive_cfg.py', common = commonOptions)
+            command = 'source $HOME/DQM.new/cmssw.sh; exec cmsRun {conf} {common}'.format(conf = config.workdir + '/es_dqm_sourceclient-privlive_cfg.py', common = commonOptions)
             proc = subprocess.Popen(command, shell = True, stdout = log, stderr = subprocess.STDOUT)
             logFile.write(command)
             procs['ES'] = (proc, log)
@@ -199,7 +199,7 @@ def startDQM(run, startLumi, daq, dqmRunKey, ecalIn, esIn, logFile):
             
             log = open(config.logdir + '/ecalcalib_dqm_sourceclient-privlive_cfg.log', 'a')
             log.write('\n\n\n')
-            command = 'source $HOME/DQM/cmssw.sh; exec cmsRun {conf} {common} {ecal} {spec}'.format(conf = config.workdir + '/ecalConfigBuilder.py', common = commonOptions, ecal = ecalOptions, spec = 'cfgType=CalibrationStandalone')
+            command = 'source $HOME/DQM.new/cmssw.sh; exec cmsRun {conf} {common} {ecal} {spec}'.format(conf = config.workdir + '/ecalConfigBuilder.py', common = commonOptions, ecal = ecalOptions, spec = 'cfgType=CalibrationStandalone')
             proc = subprocess.Popen(command, shell = True, stdout = log, stderr = subprocess.STDOUT)
             logFile.write(command)
             procs['Calibration'] = (proc, log)
@@ -207,7 +207,7 @@ def startDQM(run, startLumi, daq, dqmRunKey, ecalIn, esIn, logFile):
         if esIn:
             log = open(config.logdir + '/es_dqm_sourceclient-privlive_cfg.log', 'a')
             log.write('\n\n\n')
-            command = 'source $HOME/DQM/cmssw.sh; exec cmsRun {conf} {common}'.format(conf = config.workdir + '/es_dqm_sourceclient-privlive_cfg.py', common = commonOptions)
+            command = 'source $HOME/DQM.new/cmssw.sh; exec cmsRun {conf} {common}'.format(conf = config.workdir + '/es_dqm_sourceclient-privlive_cfg.py', common = commonOptions)
             proc = subprocess.Popen(command, shell = True, stdout = log, stderr = subprocess.STDOUT)
             logFile.write(command)
             procs['ES'] = (proc, log)
@@ -262,7 +262,7 @@ def writeDB(run, condDB, runParamDB, logFile):
         if 'R%09d'%run in fileName:
             inputFiles += ' inputFiles=' + config.tmpoutdir + '/' + fileName
 
-            command = 'source $HOME/DQM/cmssw.sh; exec cmsRun {conf} {inputFiles} {MGPAgain} {runType}'.format(conf='/nfshome0/ecalpro/DQM/test_msun/writeDB_cfg.py', inputFiles = inputFiles, MGPAgain=MGPAgain, runType=runType)
+            command = 'source $HOME/DQM.new/cmssw.sh; exec cmsRun {conf} {inputFiles} {MGPAgain} {runType}'.format(conf = config.workdir + '/writeDB_cfg.py', inputFiles = inputFiles, MGPAgain=MGPAgain, runType=runType)
             logFile.write(command)
             log = open(config.logdir + '/dbwrite.log', 'a')
             proc = subprocess.Popen(command, shell = True, stdout = log, stderr = subprocess.STDOUT)
@@ -396,10 +396,13 @@ def processRun(currentRun, startLumi, logFile, ecalCondDB, runParamDB, isLatestR
             logFile.write('Copying ROOT file to closed')
 
             runname = 'R%09d'%currentRun 
-            for filename in os.listdir('/data/ecalod-disk01/dqm-data/tmp/'):
+            #for filename in os.listdir('/data/dqm-data/tmp/'):
+            for filename in os.listdir(config.tmpoutdir):
                 if runname in filename:
-                    source_file='/data/ecalod-disk01/dqm-data/tmp/'+ filename
-                    destination_file='/data/ecalod-disk01/dqm-data/tmp/closed/'+ filename
+                    #source_file='/data/dqm-data/tmp/'+ filename
+                    source_file=config.tmpoutdir + filename
+                    #destination_file='/data/dqm-data/tmp/closed/'+ filename
+                    destination_file=config.tmpoutdir + '/closed/'+ filename
                     try:
                         os.rename(source_file,destination_file)
                     except OSError:
