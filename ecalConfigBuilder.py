@@ -104,9 +104,13 @@ def buildEcalDQMModules(process, options):
         elif calib:
             from RecoLocalCalo.EcalRecProducers.ecalFixedAlphaBetaFitUncalibRecHit_cfi import ecalFixedAlphaBetaFitUncalibRecHit
             process.ecalLaserLedUncalibRecHit = ecalFixedAlphaBetaFitUncalibRecHit.clone(
-                MinAmplBarrel = 12.,
-                MinAmplEndcap = 16.
+                algoPSet= cms.PSet(
+                    MinAmplBarrel = cms.double(12.),
+                    MinAmplEndcap = cms.double(16.)
+                )
             )
+         #   process.ecalLaserLedUncalibRecHit.algoPSet.MinAmplBarrel = 12.
+         #   process.ecalLaserLedUncalibRecHit.algoPSet.MinAmplEndcap = 16.
             from RecoLocalCalo.EcalRecProducers.ecalMaxSampleUncalibRecHit_cfi import ecalMaxSampleUncalibRecHit
             process.ecalTestPulseUncalibRecHit = ecalMaxSampleUncalibRecHit.clone(
                 EBdigiCollection = "ecalDigis:ebDigis",
@@ -176,13 +180,14 @@ def buildEcalDQMModules(process, options):
 
             if options.cfgType == 'CalibrationStandalone':
                 process.load("DQM.EcalMonitorTasks.EcalMonitorTask_cfi")
-                process.ecalMonitorTask.workers = ["IntegrityTask", "RawDataTask"]
+                process.ecalMonitorTask.workers = ["IntegrityTask", "RawDataTask","PresampleTask"]
                 process.ecalMonitorTask.collectionTags.Source = options.rawDataCollection
 
             process.ecalLaserLedMonitorTask.collectionTags.EBLaserLedUncalibRecHit = 'ecalLaserLedUncalibRecHit:EcalUncalibRecHitsEB'
             process.ecalLaserLedMonitorTask.collectionTags.EELaserLedUncalibRecHit = 'ecalLaserLedUncalibRecHit:EcalUncalibRecHitsEE'
 
         if isClient:
+            #add the 1st line to enable noise plots
             process.load("DQM.EcalMonitorClient.EcalCalibMonitorClient_cfi")
             process.ecalCalibMonitorClient.verbosity = verbosity
 
@@ -190,15 +195,16 @@ def buildEcalDQMModules(process, options):
                 process.ecalCalibMonitorClient.commonParameters.onlineMode = True
             
             if options.cfgType == 'CalibrationStandalone':
-                process.ecalCalibMonitorClient.workerParameters.SummaryClient.params.activeSources = ["Integrity", "RawData"]
+                process.ecalCalibMonitorClient.workerParameters.SummaryClient.params.activeSources = ["Integrity", "RawData","Presample"]
                 if options.calibType == 'PEDESTAL':
                     process.ecalCalibMonitorClient.workers = ["IntegrityClient", "RawDataClient", "PedestalClient", "PNIntegrityClient", "SummaryClient", "CalibrationSummaryClient"]
                 elif options.calibType == 'TEST_PULSE':
                     process.ecalCalibMonitorClient.workers = ["IntegrityClient", "RawDataClient", "TestPulseClient", "PNIntegrityClient", "SummaryClient", "CalibrationSummaryClient"]
                 else:
-                    process.ecalCalibMonitorClient.workers = ["IntegrityClient", "RawDataClient", "PedestalClient", "TestPulseClient", "LaserClient", "LedClient", "PNIntegrityClient", "SummaryClient", "CalibrationSummaryClient"]
+                    process.ecalCalibMonitorClient.workers = ["IntegrityClient", "RawDataClient","PedestalClient", "TestPulseClient", "LaserClient", "LedClient", "PNIntegrityClient", "SummaryClient", "CalibrationSummaryClient", "PresampleClient"]
 
-            
+
+
         #Need to configure the source for calib summary!!
     elif laser:
         # load laser monitor client
@@ -212,7 +218,9 @@ def buildEcalDQMModules(process, options):
     ### DQM COMMON MODULES ###
 
     if live:
-        process.load('DQM.Integration.test.environment_cfi')
+        process.load('DQM.Integration.config.environment_cfi')
+        ## mandrews Sep 04 2015
+        process.load("DQMServices.Components.DQMFileSaver_cfi")
     else:
         process.load("DQMServices.Core.DQM_cfg")
         process.load("DQMServices.Components.DQMEnvironment_cfi")
@@ -261,7 +269,8 @@ def buildEcalDQMModules(process, options):
             process.dqmSaver.convention = "Offline"
             process.dqmSaver.referenceHandling = "skip"
             process.dqmSaver.workflow = options.workflow
-            process.dqmSaver.dirName = "/data/ecalod-disk01/dqm-data/tmp"            
+            process.dqmSaver.dirName = "/data/ecalod-disk01/dqm-data/tmp" 
+            process.dqmSaver.producer = 'DQM'
 
         elif not central:
             process.dqmSaver.referenceHandling = "skip"
@@ -335,7 +344,7 @@ def buildEcalDQMModules(process, options):
         )
 
     if p5:
-        process.load('DQM.Integration.test.FrontierCondition_GT_cfi')
+        process.load('DQM.Integration.config.FrontierCondition_GT_cfi')
     else:
         process.load("Configuration.StandardSequences.FrontierConditions_GlobalTag_cff")
         if options.globalTag.startswith('auto:'):
@@ -387,12 +396,15 @@ def buildEcalDQMModules(process, options):
     ### SOURCE ###
     
     if live:
-        process.load("DQM.Integration.test.inputsource_cfi")  # input source uses VarParsing (Jul 2 2014)
+        process.load("DQM.Integration.config.inputsource_cfi")  # input source uses VarParsing (Jul 2 2014)
+        if physics:
+            process.source.streamLabel = 'streamLookArea'
         if not central:
             pass
 #            process.source.endOfRunKills = False
         if calib and options.cfgType != 'CalibrationStandalone':
-            process.source.streamLabel = 'streamDQMCalibration'
+#            process.source.streamLabel = 'streamDQMCalibration'
+            process.source.streamLabel = 'streamLookArea'
 
     else:
         if '.dat' in options.inputFiles[0]:
@@ -975,7 +987,7 @@ if options.outputFile:
         process.prune()
 
         if options.cfgType == 'Physics' and 'Live' in options.environment:
-            from DQM.Integration.test.dqmPythonTypes import *
+            from DQM.Integration.config.dqmPythonTypes import *
             runType = RunType(['pp_run','cosmic_run','hi_run','hpu_run'])
             if not options.runkey.strip():
                 options.runkey = 'pp_run'

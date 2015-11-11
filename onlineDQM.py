@@ -13,135 +13,6 @@ from logger import Logger
 
 VERBOSITY = 0
 
-class GlobalRunFileCopyDaemon(object):
-    # TEMPORARY SOLUTION (SEE BELOW)
-    def __init__(self, run, startLumi, runInputDir, sources, logFile):
-        self.run = run
-        self.startLumi = startLumi
-        self.targetDir = runInputDir + '/run%s' % run
-        self.sources = sources # {stream: (node, dir, suffix), ..}
-        self._stop = threading.Event()
-        self.allLumis = dict([(stream, set([])) for stream in self.sources.keys()])
-        self.logFile = logFile
-
-        try:
-            shutil.rmtree(self.targetDir, True)
-        except:
-            pass
-
-        try:
-            os.makedirs(self.targetDir)
-        except OSError:
-            pass
-
-        self.updateList()
-
-
-    def __del__(self):
-        self._stop.set()
-        try:
-            shutil.rmtree(self.targetDir, True)
-        except:
-            pass
-
-
-    def updateList(self):
-        for stream, (node, directory, suffix) in self.sources.items():
-            self.allLumis[stream].clear()
-
-            proc = subprocess.Popen('ssh {node} "ls {rundir}/run{run}/run{run}_ls*"'.format(node = node, rundir = directory, run = self.run), shell = True, stdout = subprocess.PIPE, stderr = subprocess.STDOUT)
-            data = proc.communicate()[0]
-    
-            if proc.poll() != 0:
-                return
-
-            fullPaths = data.split()
-
-            deleted = []
-            for filename in fullPaths:
-                matches = re.search('run{run}_ls([0-9]+)_stream{stream}_{suffix}[.]dat[.]deleted$'.format(run = self.run, stream = stream, suffix = suffix), filename)
-                if matches:
-                    deleted.append(int(matches.group(1)))
-
-            for filename in fullPaths:
-                matches = re.search('run{run}_ls([0-9]+)_stream{stream}_{suffix}[.]jsn$'.format(run = self.run, stream = stream, suffix = suffix), filename)
-                if not matches: continue
-                lumi = int(matches.group(1))
-                if lumi >= self.startLumi and lumi not in deleted:
-                    self.allLumis[stream].add(lumi)
-
-
-    def copy(self, stream, lumi):
-        node, directory, suffix = self.sources[stream]
-
-        fileName = 'run%d_ls%04d_stream%s_%s' % (self.run, lumi, stream, suffix)
-
-        if os.path.exists(self.targetDir + '/' + fileName + '.jsn'): return True
-        
-        proc = subprocess.Popen(['scp', '{node}:{directory}/run{run}/'.format(node = node, directory = directory, run = self.run) + fileName + '.dat', self.targetDir], stdout = subprocess.PIPE, stderr = subprocess.STDOUT)
-        proc.communicate()
-
-        proc = subprocess.Popen(['scp', '{node}:{directory}/run{run}/'.format(node = node, directory = directory, run = self.run) + fileName + '.jsn', self.targetDir], stdout = subprocess.PIPE, stderr = subprocess.STDOUT)
-        try:
-            proc.communicate()
-        except KeyboardInterrupt:
-            proc.terminate()
-            proc.communicate()
-            raise
-
-        if proc.returncode == 0:
-            self.logFile.write('Copied ' + fileName + ' from ' + node)
-        else:
-            self.logFile.write('Failed to copy ' + fileName + ' from ' + node)
-
-
-    def start(self):
-        copied = dict([(stream, set([])) for stream in self.sources.keys()])
-
-        try:
-            os.unlink('{rundir}/run{run}/run{run}_ls0000_EoR.jsn'.format(rundir = self.targetDir, run = self.run))
-        except:
-            pass
-
-        while True:
-            nEnded = 0
-            for stream, allLumis in self.allLumis.items():
-                lumis = sorted(list(allLumis - copied[stream]))
-
-                if len(lumis) == 0: continue # potentially cause hang-up if EoR is somehow not written..
-
-                if lumis[0] == 0:
-                    nEnded += 1
-                    lumis.pop(0)
-
-                self.logFile.write(('Lumis to copy for stream %s: ' % stream) + str(lumis))
-    
-                for lumi in lumis:
-                    if self._stop.isSet():
-                        break
-    
-                    if lumi < self.startLumi:
-                        copied[stream].add(lumi)
-                        continue
-    
-                    self.copy(stream, lumi)
-                    copied[stream].add(lumi)
-    
-                if self._stop.isSet():
-                    break
-
-            if nEnded == len(self.allLumis) or self._stop.isSet():
-                break
-
-            time.sleep(60)
-
-            self.updateList()
-
-
-    def stop(self):
-        self._stop.set()
-
-
 def startDQM(run, startLumi, daq, dqmRunKey, ecalIn, esIn, logFile):
     """
     Collect the run parameters and start the DQM job if a run is detected.
@@ -161,46 +32,24 @@ def startDQM(run, startLumi, daq, dqmRunKey, ecalIn, esIn, logFile):
     procs = {}
 
     if daq == 'central':
-        commonOptions = 'runNumber={run} runInputDir={inputDir} workflow=/{dataset}/{period}/CentralDAQ'.format(run = run, inputDir = '/tmp/onlineDQM', dataset = workflowBase, period = config.period)
-
-        if ecalIn:
-            ecalOptions = 'environment=PrivLive outputPath={outputPath} verbosity={verbosity}'.format(outputPath = config.tmpoutdir, verbosity = VERBOSITY)
-
-            log = open(config.logdir + '/ecal_dqm_sourceclient-privlive_cfg.log', 'a')
-            log.write('\n\n\n')
-            command = 'source $HOME/DQM/cmssw.sh; exec cmsRun {conf} {common} {ecal} {spec}'.format(conf = config.workdir + '/ecalConfigBuilder.py', common = commonOptions, ecal = ecalOptions, spec = 'cfgType=Physics')
-            proc = subprocess.Popen(command, shell = True, stdout = log, stderr = subprocess.STDOUT)
-            logFile.write(command)
-            procs['Physics'] = (proc, log)
-    
-            log = open(config.logdir + '/ecalcalib_dqm_sourceclient-privlive_cfg.log', 'a')
-            log.write('\n\n\n')
-            command = 'source $HOME/DQM/cmssw.sh; exec cmsRun {conf} {common} {ecal} {spec}'.format(conf = config.workdir + '/ecalConfigBuilder.py', common = commonOptions, ecal = ecalOptions, spec = 'cfgType=Calibration')
-            proc = subprocess.Popen(command, shell = True, stdout = log, stderr = subprocess.STDOUT)
-            logFile.write(command)
-            procs['Calibration'] = (proc, log)
-
-        if esIn:
-            log = open(config.logdir + '/es_dqm_sourceclient-privlive_cfg.log', 'a')
-            log.write('\n\n\n')
-            command = 'source $HOME/DQM/cmssw.sh; exec cmsRun {conf} {common}'.format(conf = config.workdir + '/es_dqm_sourceclient-privlive_cfg.py', common = commonOptions)
-            proc = subprocess.Popen(command, shell = True, stdout = log, stderr = subprocess.STDOUT)
-            logFile.write(command)
-            procs['ES'] = (proc, log)
+        return {}
 
     elif daq == 'minidaq':
-        if not os.path.isdir('/dqmminidaq/run%d' % run):
+#        if not os.path.isdir('/dqmminidaq/run%d' % run):
+        if not os.path.isdir('/tmp/dqmminidaq/run%d' % run):
             logFile.write('DQM stream was not produced')
             return {}
 
-        commonOptions = 'runNumber={run} runInputDir={inputDir} workflow=/{dataset}/{period}/MiniDAQ'.format(run = run, inputDir = '/dqmminidaq', dataset = workflowBase, period = config.period)
+#        commonOptions = 'runNumber={run} runInputDir={inputDir} workflow=/{dataset}/{period}/MiniDAQ'.format(run = run, inputDir = '/dqmminidaq', dataset = workflowBase, period = config.period)
+        commonOptions = 'runNumber={run} runInputDir={inputDir} workflow=/{dataset}/{period}/MiniDAQ'.format(run = run, inputDir = '/tmp/dqmminidaq', dataset = workflowBase, period = config.period)
 
         if ecalIn:
+        
             ecalOptions = 'environment=PrivLive outputPath={outputPath} verbosity={verbosity}'.format(outputPath = config.tmpoutdir, verbosity = VERBOSITY)
             
             log = open(config.logdir + '/ecalcalib_dqm_sourceclient-privlive_cfg.log', 'a')
             log.write('\n\n\n')
-            command = 'source $HOME/DQM/cmssw.sh; exec cmsRun {conf} {common} {ecal} {spec}'.format(conf = config.workdir + '/ecalConfigBuilder.py', common = commonOptions, ecal = ecalOptions, spec = 'cfgType=CalibrationStandalone')
+            command = 'source $HOME/DQM/test_msun/new/cmssw.sh; exec cmsRun {conf} {common} {ecal} {spec}'.format(conf = config.workdir + '/ecalConfigBuilder.py', common = commonOptions, ecal = ecalOptions, spec = 'cfgType=CalibrationStandalone')
             proc = subprocess.Popen(command, shell = True, stdout = log, stderr = subprocess.STDOUT)
             logFile.write(command)
             procs['Calibration'] = (proc, log)
@@ -208,7 +57,7 @@ def startDQM(run, startLumi, daq, dqmRunKey, ecalIn, esIn, logFile):
         if esIn:
             log = open(config.logdir + '/es_dqm_sourceclient-privlive_cfg.log', 'a')
             log.write('\n\n\n')
-            command = 'source $HOME/DQM/cmssw.sh; exec cmsRun {conf} {common}'.format(conf = config.workdir + '/es_dqm_sourceclient-privlive_cfg.py', common = commonOptions)
+            command = 'source $HOME/DQM/test_msun/new/cmssw.sh; exec cmsRun {conf} {common}'.format(conf = config.workdir + '/es_dqm_sourceclient-privlive_cfg.py', common = commonOptions)
             proc = subprocess.Popen(command, shell = True, stdout = log, stderr = subprocess.STDOUT)
             logFile.write(command)
             procs['ES'] = (proc, log)
@@ -229,7 +78,6 @@ def checkProcess(process):
     if process.returncode == 0: return SUCCESS
     else: return FAILED
 
-
 def writeDB(run, condDB, runParamDB, logFile):
     logFile.write('Start DB writing.')
 
@@ -242,23 +90,27 @@ def writeDB(run, condDB, runParamDB, logFile):
         logFile.write('DAQ type undefined')
         return FAILED
 
-#                condDB.setMonRunOutcome(run, 'dqmdone')
-#
-#                # now write DQM results to DB using CMSSW
-#                inputFiles = ''
-#                for fileName in os.listdir(config.tmpoutdir):
-#                    if '%09d' % run in fileName:
-#                        inputFiles += ' inputFiles=' + config.tmpoutdir + '/' + fileName
-#
-#                command = 'source $HOME/DQM/cmssw.sh; exec cmsRun {conf} {inputFiles}'.format(conf = config.workdir + '/writeDB_cfg.py', inputFiles = inputFiles)
-#                log = open(config.logdir + '/dbwrite.log', 'a')
-#                proc = subprocess.Popen(command, shell = True, stdout = log, stderr = subprocess.STDOUT)
-#
-#                while proc.poll() is None:
-#                    time.sleep(10)
-#
-#                log.close()
+#    condDB.setMonRunOutcome(run, 'dqmdone')
+    logFile.write('Start Subprocess')
+    # now write DQM results to DB using CMSSW
+    inputFiles = ''
+    MGPAgain=''
+    MGPAgain += ' MGPAGains='+ str(1) + " MGPAGains="+ str(6) + " MGPAGains=" + str(12)
+    for fileName in os.listdir(config.tmpoutdir):
+        if '%09d' % run in fileName:
+            inputFiles += ' inputFiles=' + config.tmpoutdir + '/' + fileName
 
+        command = 'source $HOME/DQM/cmssw.sh; exec cmsRun {conf} {inputFiles} {MGPAgain}'.format('/nfshome0/ecalpro/DQM/test_msun/writeDB_cfg.py', inputFiles = inputFiles, MGPAgain=MGPAgain)
+        logFile.write(command)
+        log = open(config.logdir + '/dbwrite.log', 'a')
+        proc = subprocess.Popen(command, shell = True, stdout = log, stderr = subprocess.STDOUT)
+
+        while proc.poll() is None:
+            time.sleep(10)
+
+        log.close()
+
+    return SUCCESS
 #    try:
 #        logFile.write('MonRun IOV:', condDB.getMonRunIOV(condDB.getRunIOV(run)).values['IOV_ID'])
 #        return SUCCESS
@@ -266,8 +118,7 @@ def writeDB(run, condDB, runParamDB, logFile):
 #        logFile.write('DB writing failed.')
 #        return FAILED
 
-    return SUCCESS
-
+#    return SUCCESS
 
 UNKNOWN = -1
 WAIT = 0
@@ -291,18 +142,9 @@ def processRun(currentRun, startLumi, logFile, ecalCondDB, runParamDB, isLatestR
     logFile.write('DAQ type: ', daq)
 
     if daq == 'central':
-        copyDaemon = GlobalRunFileCopyDaemon(currentRun, startLumi, '/tmp/onlineDQM', {'DQM': ('fu-c2f13-39-01', '/fff/BU0/ramdisk', 'mrg-c2f13-35-01'), 'DQMCalibration': ('fu-c2f13-39-01', '/fff/BU0/ramdisk', 'mrg-c2f13-35-01')}, logFile)
-        if sum(map(len, copyDaemon.allLumis.values())) == 0:
-            logFile.write('No files to be copied.')
-            if isLatestRun:
-                returnValue[0] = WAIT
-            else:
-                returnValue[0] = NEXT
-            return
-
-        logFile.write('Starting file copy daemon')
-        copyThread = threading.Thread(target = GlobalRunFileCopyDaemon.start, args = (copyDaemon,))
-        copyThread.start()
+        logFile.write('Central DAQ run: currently not avaiable')
+        returnValue[0] = NEXT
+        return
 
     dqmRunKey = runParamDB.getRunParameter(currentRun, 'CMS.LVL0:DQM_RUNKEY_AT_CONFIGURE').lower()
 
@@ -312,26 +154,19 @@ def processRun(currentRun, startLumi, logFile, ecalCondDB, runParamDB, isLatestR
 
     if len(procs) == 0:
         logFile.write('No CMSSW job to execute')
-        if daq == 'central':
-            copyDaemon.stop()
-
         returnValue[0] = WAIT
         return
 
     if daq == 'central':
-        runDir = '/tmp/onlineDQM/run%d' % currentRun
+        runDir ='' 
     else:
-        runDir = '/dqmminidaq/run%d' % currentRun
+#        runDir = '/dqmminidaq/run%d' % currentRun
+        runDir = '/tmp/dqmminidaq/run%d' % currentRun
 
     results = {}
 
     while len(results) != len(procs):
         if stopFlag.isSet():
-            if daq == 'central':
-                print 'Stopping copy daemon.'
-                copyDaemon.stop()
-                copyThread.join()
-
             print 'Soft kill DQM processes.'
             open(runDir + '/run%d_ls0000_EoR.jsn' % currentRun, 'w').close()
             time.sleep(5)
@@ -348,8 +183,9 @@ def processRun(currentRun, startLumi, logFile, ecalCondDB, runParamDB, isLatestR
             if currentRun < runParamDB.getLatestEcalRun():
                 open(runDir + '/run%d_ls0000_EoR.jsn' % currentRun, 'w').close()
         else:
-            if daq == 'central' and not copyThread.isAlive():
-                open(runDir + '/run%d_ls0000_EoR.jsn' % currentRun, 'w').close()
+            if daq == 'central':
+                returnValue[0] = NEXT
+                return
 
         for pname, (proc, log) in procs.items():
             status = checkProcess(proc)
@@ -358,8 +194,8 @@ def processRun(currentRun, startLumi, logFile, ecalCondDB, runParamDB, isLatestR
                 log.close()
 
     if daq == 'central':
-        copyDaemon.stop()
-        copyThread.join()
+        returnValue[0] = NEXT
+        return
 
     if stopFlag.isSet():
         returnValue[0] = KILLED
@@ -368,8 +204,9 @@ def processRun(currentRun, startLumi, logFile, ecalCondDB, runParamDB, isLatestR
     if FAILED not in results.values():
         logFile.write('CMSSW job successfully returned.')
 
-        result = writeDB(currentRun, ecalCondDB, runParamDB, logFile)
+#        result = writeDB(currentRun, ecalCondDB, runParamDB, logFile)
 
+        result = SUCCESS
         if result == SUCCESS:
             logFile.write('Copying ROOT file to closed')
 
@@ -420,7 +257,8 @@ if __name__ == '__main__':
         ecalCondDB = EcalCondDB(config.dbwrite.dbName, config.dbwrite.dbUserName, config.dbwrite.dbPassword)
 
         latest = runParamDB.getLatestEcalRun()
-    
+
+        print 'latest run', latest 
         try:
             currentRun = int(args[0])
             if currentRun > latest: currentRun = latest

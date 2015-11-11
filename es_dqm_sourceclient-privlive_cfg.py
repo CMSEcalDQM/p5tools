@@ -46,16 +46,16 @@ process.MessageLogger = cms.Service("MessageLogger",
 )
 
 # for live online DQM in P5
-process.load("DQM.Integration.test.inputsource_cfi")
+process.load("DQM.Integration.config.inputsource_cfi")
 process.source.endOfRunKills = False
 
 # for testing in lxplus
-#process.load("DQM.Integration.test.fileinputsource_cfi")
+#process.load("DQM.Integration.config.fileinputsource_cfi")
 
 # Condition for P5 cluster
-process.load("DQM.Integration.test.FrontierCondition_GT_cfi")
+process.load("DQM.Integration.config.FrontierCondition_GT_cfi")
 # Condition for lxplus
-#process.load("DQM.Integration.test.FrontierCondition_GT_Offline_cfi") 
+#process.load("DQM.Integration.config.FrontierCondition_GT_Offline_cfi") 
 
 process.load("EventFilter.ESRawToDigi.esRawToDigi_cfi")
 #process.ecalPreshowerDigis = EventFilter.ESRawToDigi.esRawToDigi_cfi.esRawToDigi.clone()
@@ -78,10 +78,13 @@ process.preScaler.prescaleFactor = 1
 #process.load("DQMServices.Core.DQM_cfg")
 #process.load("DQMServices.Components.DQMEnvironment_cfi")
 
-process.load("DQM.Integration.test.environment_cfi")
+process.load("DQM.Integration.config.environment_cfi")
 process.dqmEnv.subSystemFolder = 'EcalPreshower'
 process.DQMStore.referenceFileName = '/dqmdata/dqm/reference/es_reference.root'
 # for local test
+
+##### EDIT mandrews Sep 04 2015
+process.load("DQMServices.Components.DQMFileSaver_cfi")
 
 ##### EDIT yiiyama Aug 08 2014
 process.dqmSaver.dirName = config.tmpoutdir
@@ -89,6 +92,7 @@ process.dqmSaver.workflow = options.workflow
 process.dqmSaver.referenceHandling = "skip"
 process.dqmSaver.version = 3
 process.dqmSaver.convention = "Offline"
+process.dqmSaver.producer = "DQM"
 
 process.DQM.collectorPort = 9190
 process.DQM.collectorHost = "ecalod-web01.cms"
