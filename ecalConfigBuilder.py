@@ -89,6 +89,9 @@ def buildEcalDQMModules(process, options):
             process.simEcalTriggerPrimitiveDigis.InstanceEB = "ebDigis"
             process.simEcalTriggerPrimitiveDigis.InstanceEE = "eeDigis"
 
+            # mandrews 18Nov2015
+            process.load("RecoLuminosity.LumiProducer.bunchSpacingProducer_cfi")
+            
             process.load("L1Trigger.Configuration.L1RawToDigi_cff")
 
             if not live: # for RecoSummaryTask and ClusterExtraTask
@@ -359,12 +362,12 @@ def buildEcalDQMModules(process, options):
         cms.PSet(
             record = cms.string("EcalDQMChannelStatusRcd"),
             tag = cms.string("EcalDQMChannelStatus_v1_hlt"),
-            connect = cms.untracked.string(connect.replace('CMS_COND_31X_GLOBALTAG', 'CMS_COND_34X_ECAL'))
+            connect = cms.string(connect.replace('CMS_COND_31X_GLOBALTAG', 'CMS_COND_34X_ECAL'))
         ),
         cms.PSet(
             record = cms.string("EcalDQMTowerStatusRcd"),
             tag = cms.string("EcalDQMTowerStatus_v1_hlt"),
-            connect = cms.untracked.string(connect.replace('CMS_COND_31X_GLOBALTAG', 'CMS_COND_34X_ECAL'))
+            connect = cms.string(connect.replace('CMS_COND_31X_GLOBALTAG', 'CMS_COND_34X_ECAL'))
         )
     )
 
@@ -461,6 +464,9 @@ def buildEcalDQMSequences(process, options):
             )
         
         if physics:
+            # mandrews 18Nov2015
+            process.ecalPreRecoSequence = cms.Sequence(process.bunchSpacingProducer+process.ecalDigis)
+
             process.ecalRecoSequence += cms.Sequence(
                 process.simEcalTriggerPrimitiveDigis +
                 process.gtDigis
@@ -897,9 +903,11 @@ elif runTypeName == 'cosmic_run':
     process.ecalMonitorTask.workers = ['EnergyTask', 'IntegrityTask', 'OccupancyTask', 'RawDataTask', 'TrigPrimTask', 'PresampleTask', 'SelectiveReadoutTask']
     process.ecalMonitorClient.workers = ['IntegrityClient', 'OccupancyClient', 'PresampleClient', 'RawDataClient', 'SelectiveReadoutClient', 'TrigPrimClient', 'SummaryClient']
     process.ecalMonitorClient.workerParameters.SummaryClient.params.activeSources = ['Integrity', 'RawData', 'Presample', 'TriggerPrimitives', 'HotCell']
-elif runTypeName == runType.hi_run:
+elif runTypeName == 'hi_run':
     process.DQMStore.referenceFileName = referenceFileName.replace('.root', '_hi.root')
-elif runTypeName == runType.hpu_run:
+    process.ecalMonitorTask.collectionTags.Source = "rawDataRepacker"
+    process.ecalDigis.InputLabel = cms.InputTag('rawDataRepacker')
+elif runTypeName == 'hpu_run':
     process.DQMStore.referenceFileName = referenceFileName.replace('.root', '_hpu.root')
     process.source.SelectEvents = cms.untracked.PSet(SelectEvents = cms.vstring('*'))
 """)
@@ -1003,9 +1011,11 @@ if options.outputFile:
                 process.ecalMonitorTask.workers = ['EnergyTask', 'IntegrityTask', 'OccupancyTask', 'RawDataTask', 'TrigPrimTask', 'PresampleTask', 'SelectiveReadoutTask']
                 process.ecalMonitorClient.workers = ['IntegrityClient', 'OccupancyClient', 'PresampleClient', 'RawDataClient', 'SelectiveReadoutClient', 'TrigPrimClient', 'SummaryClient']
                 process.ecalMonitorClient.workerParameters.SummaryClient.params.activeSources = ['Integrity', 'RawData', 'Presample', 'TriggerPrimitives', 'HotCell']
-            elif runType.getRunType() == runType.hi_run:
+            elif runType.getRunType() == 'hi_run':
                 process.DQMStore.referenceFileName = referenceFileName.replace('.root', '_hi.root')
-            elif runType.getRunType() == runType.hpu_run:
+                process.ecalMonitorTask.collectionTags.Source = "rawDataRepacker"
+                process.ecalDigis.InputLabel = cms.InputTag('rawDataRepacker')
+            elif runType.getRunType() == 'hpu_run':
                 process.DQMStore.referenceFileName = referenceFileName.replace('.root', '_hpu.root')
                 process.source.SelectEvents = cms.untracked.PSet(SelectEvents = cms.vstring('*'))
 
