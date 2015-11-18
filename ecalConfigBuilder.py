@@ -89,9 +89,7 @@ def buildEcalDQMModules(process, options):
             process.simEcalTriggerPrimitiveDigis.InstanceEB = "ebDigis"
             process.simEcalTriggerPrimitiveDigis.InstanceEE = "eeDigis"
 
-            # mandrews 18Nov2015
             process.load("RecoLuminosity.LumiProducer.bunchSpacingProducer_cfi")
-            
             process.load("L1Trigger.Configuration.L1RawToDigi_cff")
 
             if not live: # for RecoSummaryTask and ClusterExtraTask
@@ -222,7 +220,6 @@ def buildEcalDQMModules(process, options):
 
     if live:
         process.load('DQM.Integration.config.environment_cfi')
-        ## mandrews Sep 04 2015
         process.load("DQMServices.Components.DQMFileSaver_cfi")
     else:
         process.load("DQMServices.Core.DQM_cfg")
@@ -464,9 +461,7 @@ def buildEcalDQMSequences(process, options):
             )
         
         if physics:
-            # mandrews 18Nov2015
             process.ecalPreRecoSequence = cms.Sequence(process.bunchSpacingProducer+process.ecalDigis)
-
             process.ecalRecoSequence += cms.Sequence(
                 process.simEcalTriggerPrimitiveDigis +
                 process.gtDigis
