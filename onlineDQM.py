@@ -396,13 +396,10 @@ def processRun(currentRun, startLumi, logFile, ecalCondDB, runParamDB, isLatestR
             logFile.write('Copying ROOT file to closed')
 
             runname = 'R%09d'%currentRun 
-            #for filename in os.listdir('/data/dqm-data/tmp/'):
             for filename in os.listdir(config.tmpoutdir):
                 if runname in filename:
-                    #source_file='/data/dqm-data/tmp/'+ filename
-                    source_file=config.tmpoutdir + filename
-                    #destination_file='/data/dqm-data/tmp/closed/'+ filename
-                    destination_file=config.tmpoutdir + '/closed/'+ filename
+                    source_file=config.tmpoutdir+'/'+filename
+                    destination_file=config.tmpoutdir+'/closed/'+filename
                     try:
                         os.rename(source_file,destination_file)
                     except OSError:
