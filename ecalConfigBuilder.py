@@ -40,12 +40,13 @@ def buildEcalDQMModules(process, options):
     ### RECONSTRUCTION MODULES ###
 
     if isSource:
-        process.load("Geometry.CaloEventSetup.CaloGeometry_cfi")
-        process.load("Geometry.CaloEventSetup.CaloTopology_cfi")
-        process.load("Geometry.CaloEventSetup.EcalTrigTowerConstituents_cfi")
-        process.load("Geometry.CMSCommonData.cmsIdealGeometryXML_cfi")
-        process.load("Geometry.EcalMapping.EcalMapping_cfi")
-        process.load("Geometry.EcalMapping.EcalMappingRecord_cfi")
+        process.load("Configuration.StandardSequences.GeometryRecoDB_cff")
+        #process.load("Geometry.CaloEventSetup.CaloGeometry_cfi")
+        #process.load("Geometry.CaloEventSetup.CaloTopology_cfi")
+        #process.load("Geometry.CaloEventSetup.EcalTrigTowerConstituents_cfi")
+        #process.load("Geometry.CMSCommonData.cmsIdealGeometryXML_cfi")
+        #process.load("Geometry.EcalMapping.EcalMapping_cfi")
+        #process.load("Geometry.EcalMapping.EcalMappingRecord_cfi")
         
         if not laser:
             from EventFilter.EcalRawToDigi.EcalUnpackerData_cfi import ecalEBunpacker
@@ -291,7 +292,7 @@ def buildEcalDQMModules(process, options):
             process.dqmSaver.dirName = options.outputPath
 
     if live and privEcal:
-        process.DQM.collectorHost = "ecalod-web01.cms"
+        process.DQM.collectorHost = "fu-c2f11-21-02"
         process.DQM.collectorPort = 9190
     elif live and local:
         process.DQM.collectorHost = "localhost"
