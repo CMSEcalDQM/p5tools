@@ -52,17 +52,13 @@ process.maxEvents = cms.untracked.PSet(
     input = cms.untracked.int32(1)
 )
 
-process.load("Geometry.CaloEventSetup.CaloGeometry_cfi")
-
-process.load("Geometry.CaloEventSetup.CaloTopology_cfi")
-
-process.load("Geometry.CaloEventSetup.EcalTrigTowerConstituents_cfi")
-
-process.load("Geometry.CMSCommonData.cmsIdealGeometryXML_cfi")
-
-process.load("Geometry.EcalMapping.EcalMapping_cfi")
-
-process.load("Geometry.EcalMapping.EcalMappingRecord_cfi")
+process.load("Configuration.StandardSequences.GeometryRecoDB_cff")
+#process.load("Geometry.CaloEventSetup.CaloGeometry_cfi")
+#process.load("Geometry.CaloEventSetup.CaloTopology_cfi")
+#process.load("Geometry.CaloEventSetup.EcalTrigTowerConstituents_cfi")
+#process.load("Geometry.CMSCommonData.cmsIdealGeometryXML_cfi")
+#process.load("Geometry.EcalMapping.EcalMapping_cfi")
+#process.load("Geometry.EcalMapping.EcalMappingRecord_cfi")
 
 process.load("DQM.Integration.config.FrontierCondition_GT_cfi")
 

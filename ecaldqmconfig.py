@@ -1,5 +1,5 @@
 TEST = False
-#TEST = False
+#TEST = True
 
 class ConfigNode:
     def __init__(self):
@@ -24,7 +24,7 @@ config = ConfigNode()
 
 config.workdir = '/nfshome0/ecalpro/DQM.new/p5tools'
 
-config.period = 'Run2015'
+config.period = 'Run2016'
 
 config.logdir = '/data/dqm-data/logs'
 config.tmpoutdir = '/data/dqm-data/tmp'
