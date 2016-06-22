@@ -133,7 +133,8 @@ if (process.runType.getRunType() == process.runType.hi_run):
     process.ecalPreshowerRawDataTask.FEDRawDataCollection = cms.InputTag("rawDataRepacker")
 
 # HACK Aug 9 yiiyama
-process.source.minEventsPerLumi = 1000
+#process.source.minEventsPerLumi = 1000
+process.source.minEventsPerLumi = cms.untracked.int32(-1)
 
 process.maxEvents = cms.untracked.PSet(
     input = cms.untracked.int32(-1)

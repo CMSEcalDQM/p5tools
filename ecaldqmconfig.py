@@ -22,7 +22,7 @@ class ConfigNode:
 
 config = ConfigNode()
 
-config.workdir = '/nfshome0/ecalpro/DQM.new/p5tools'
+config.workdir = '/nfshome0/ecalpro/DQM/p5tools'
 
 config.period = 'Run2016'
 
@@ -32,10 +32,10 @@ config.tmpoutdir = '/data/dqm-data/tmp'
 
 config.dbwrite = ConfigNode()
 if TEST:
-    config.dbwrite.readFile('/nfshome0/ecalpro/DQM.new/.ecal_db_test.conf')
+    config.dbwrite.readFile('/nfshome0/ecalpro/DQM/.ecal_db_test.conf')
 else:
-    config.dbwrite.readFile('/nfshome0/ecalpro/DQM.new/.ecal_db_prod.conf')
+    config.dbwrite.readFile('/nfshome0/ecalpro/DQM/.ecal_db_prod.conf')
 
 config.dbread = ConfigNode()
-config.dbread.readFile('/nfshome0/ecalpro/DQM.new/.ecal_db_read.conf')
+config.dbread.readFile('/nfshome0/ecalpro/DQM/.ecal_db_read.conf')
 
