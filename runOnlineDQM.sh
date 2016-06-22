@@ -1,5 +1,5 @@
 #!/bin/bash
 
-source $HOME/DQM.new/cmssw.sh
+source $HOME/DQM/cmssw.sh
 
-python $HOME/DQM.new/p5tools/onlineDQM.py $1 $2
+python $HOME/DQM/p5tools/onlineDQM.py $1 $2

@@ -95,7 +95,7 @@ process.dqmSaver.convention = "Offline"
 process.dqmSaver.producer = "DQM"
 
 process.DQM.collectorPort = 9190
-process.DQM.collectorHost = "ecalod-web01.cms"
+process.DQM.collectorHost = "fu-c2f11-21-02"
 ##### EDIT yiiyama Aug 08 2014
 
 process.load("DQM.EcalPreshowerMonitorModule.EcalPreshowerMonitorTasks_cfi")
@@ -133,7 +133,8 @@ if (process.runType.getRunType() == process.runType.hi_run):
     process.ecalPreshowerRawDataTask.FEDRawDataCollection = cms.InputTag("rawDataRepacker")
 
 # HACK Aug 9 yiiyama
-process.source.minEventsPerLumi = 1000
+#process.source.minEventsPerLumi = 1000
+process.source.minEventsPerLumi = cms.untracked.int32(-1)
 
 process.maxEvents = cms.untracked.PSet(
     input = cms.untracked.int32(-1)
