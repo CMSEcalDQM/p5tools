@@ -178,13 +178,13 @@ def startDQM(run, startLumi, daq, dqmRunKey, ecalIn, esIn, logFile):
 #            logFile.write(command)
 #            procs['Calibration'] = (proc, log)
 
-        if esIn:
-            log = open(config.logdir + '/es_dqm_sourceclient-privlive_cfg.log', 'a')
-            log.write('\n\n\n')
-            command = 'source $HOME/DQM/cmssw.sh; exec cmsRun {conf} {common}'.format(conf = config.workdir + '/es_dqm_sourceclient-privlive_cfg.py', common = commonOptions)
-            proc = subprocess.Popen(command, shell = True, stdout = log, stderr = subprocess.STDOUT)
-            logFile.write(command)
-            procs['ES'] = (proc, log)
+#        if esIn:
+#            log = open(config.logdir + '/es_dqm_sourceclient-privlive_cfg.log', 'a')
+#            log.write('\n\n\n')
+#            command = 'source $HOME/DQM/cmssw.sh; exec cmsRun {conf} {common}'.format(conf = config.workdir + '/es_dqm_sourceclient-privlive_cfg.py', common = commonOptions)
+#            proc = subprocess.Popen(command, shell = True, stdout = log, stderr = subprocess.STDOUT)
+#            logFile.write(command)
+#            procs['ES'] = (proc, log)
 
     elif daq == 'minidaq':
         if not os.path.isdir('/dqmminidaq/run%d' % run):

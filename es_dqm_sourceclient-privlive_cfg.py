@@ -95,7 +95,7 @@ process.dqmSaver.convention = "Offline"
 process.dqmSaver.producer = "DQM"
 
 process.DQM.collectorPort = 9190
-process.DQM.collectorHost = "ecalod-web01.cms"
+process.DQM.collectorHost = "fu-c2f11-21-02"
 ##### EDIT yiiyama Aug 08 2014
 
 process.load("DQM.EcalPreshowerMonitorModule.EcalPreshowerMonitorTasks_cfi")
