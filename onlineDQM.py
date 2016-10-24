@@ -158,7 +158,7 @@ def startDQM(run, startLumi, daq, dqmRunKey, ecalIn, esIn, logFile):
 
     procs = {}
 
-    if daq == 'central':
+#    if daq == 'central':
 #        commonOptions = 'runNumber={run} runInputDir={inputDir} workflow=/{dataset}/{period}/CentralDAQ'.format(run = run, inputDir = '/tmp/onlineDQM', dataset = workflowBase, period = config.period)
 
 #        if ecalIn:
@@ -186,7 +186,8 @@ def startDQM(run, startLumi, daq, dqmRunKey, ecalIn, esIn, logFile):
 #            logFile.write(command)
 #            procs['ES'] = (proc, log)
 
-    elif daq == 'minidaq':
+#    elif daq == 'minidaq':
+    if daq == 'minidaq':
         if not os.path.isdir('/dqmminidaq/run%d' % run):
             logFile.write('DQM stream was not produced')
             return {}
@@ -365,8 +366,17 @@ def processRun(currentRun, startLumi, logFile, ecalCondDB, runParamDB, isLatestR
             return
 
         if isLatestRun:
-            if currentRun < runParamDB.getLatestEcalRun():
-                open(runDir + '/run%d_ls0000_EoR.jsn' % currentRun, 'w').close()
+            newRun = runParamDB.getLatestEcalRun()
+            daqNew = runParamDB.getDAQType(newRun)
+            ecalInNew = (runParamDB.getRunParameter(newRun, 'CMS.LVL0:ECAL').lower() == 'in')
+            esInNew = (runParamDB.getRunParameter(newRun, 'CMS.LVL0:ES').lower() == 'in')
+            if currentRun < newRun:
+                if daqNew == 'minidaq':
+                    #logFile.write('New minidaq run started: Closing run %d.' % currentRun)
+                    open(runDir + '/run%d_ls0000_EoR.jsn' % currentRun, 'w').close()
+                elif daqNew == 'central' and (ecalInNew and esInNew):
+                    #logFile.write('Ecal and ES back in global: Closing run %d.' % currentRun)
+                    open(runDir + '/run%d_ls0000_EoR.jsn' % currentRun, 'w').close()
 #        else:
 #            if daq == 'central' and not copyThread.isAlive():
 #                open(runDir + '/run%d_ls0000_EoR.jsn' % currentRun, 'w').close()
@@ -389,7 +399,8 @@ def processRun(currentRun, startLumi, logFile, ecalCondDB, runParamDB, isLatestR
         logFile.write('CMSSW job successfully returned.')
 
         if daq == 'minidaq':
-            result = writeDB(currentRun, ecalCondDB, runParamDB, logFile)
+            #result = writeDB(currentRun, ecalCondDB, runParamDB, logFile)
+            result = SUCCESS
         elif daq == 'central':
             result = SUCCESS
         if result == SUCCESS:
