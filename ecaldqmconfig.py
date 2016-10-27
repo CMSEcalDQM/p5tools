@@ -30,6 +30,8 @@ config.logdir = '/data/dqm-data/logs'
 config.tmpoutdir = '/data/dqm-data/tmp'
 #config.tmpoutdir = '/data/test'
 
+config.prescale = 50
+
 config.dbwrite = ConfigNode()
 if TEST:
     config.dbwrite.readFile('/nfshome0/ecalpro/DQM/.ecal_db_test.conf')

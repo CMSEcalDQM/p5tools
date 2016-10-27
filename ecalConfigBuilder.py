@@ -1019,6 +1019,7 @@ if options.outputFile:
             process.ecalMonitorTask.workerParameters.TimingTask.params.energyThresholdEE = 0.
             process.ecalMonitorTask.workerParameters.OccupancyTask.params.tpThreshold = 0.
 
-        process.source.minEventsPerLumi = 100
+        #process.source.minEventsPerLumi = 100
+        process.source.minEventsPerLumi = -1
         process.source.nextLumiTimeoutMillis = 3000
 

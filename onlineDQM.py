@@ -192,7 +192,7 @@ def startDQM(run, startLumi, daq, dqmRunKey, ecalIn, esIn, logFile):
             logFile.write('DQM stream was not produced')
             return {}
 
-        commonOptions = 'runNumber={run} runInputDir={inputDir} workflow=/{dataset}/{period}/MiniDAQ'.format(run = run, inputDir = '/dqmminidaq', dataset = workflowBase, period = config.period)
+        commonOptions = 'runNumber={run} runInputDir={inputDir} workflow=/{dataset}/{period}/MiniDAQ prescaleFactor={factor}'.format(run = run, inputDir = '/dqmminidaq', dataset = workflowBase, period = config.period, factor = config.prescale)
 
         if ecalIn:
         
