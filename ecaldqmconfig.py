@@ -31,6 +31,7 @@ config.tmpoutdir = '/data/dqm-data/tmp'
 #config.tmpoutdir = '/data/test'
 
 config.prescale = 50
+#config.prescale = 1
 
 config.dbwrite = ConfigNode()
 if TEST:

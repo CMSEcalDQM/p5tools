@@ -192,10 +192,11 @@ def startDQM(run, startLumi, daq, dqmRunKey, ecalIn, esIn, logFile):
             logFile.write('DQM stream was not produced')
             return {}
 
-        commonOptions = 'runNumber={run} runInputDir={inputDir} workflow=/{dataset}/{period}/MiniDAQ prescaleFactor={factor}'.format(run = run, inputDir = '/dqmminidaq', dataset = workflowBase, period = config.period, factor = config.prescale)
+        #commonOptions = 'runNumber={run} runInputDir={inputDir} workflow=/{dataset}/{period}/MiniDAQ prescaleFactor={factor}'.format(run = run, inputDir = '/dqmminidaq', dataset = workflowBase, period = config.period, factor = config.prescale)
 
         if ecalIn:
         
+            commonOptions = 'runNumber={run} runInputDir={inputDir} workflow=/{dataset}/{period}/MiniDAQ prescaleFactor={factor}'.format(run = run, inputDir = '/dqmminidaq', dataset = workflowBase, period = config.period, factor = config.prescale)
             ecalOptions = 'environment=PrivLive outputPath={outputPath} verbosity={verbosity}'.format(outputPath = config.tmpoutdir, verbosity = VERBOSITY)
             
             log = open(config.logdir + '/ecalcalib_dqm_sourceclient-privlive_cfg.log', 'a')
@@ -206,6 +207,7 @@ def startDQM(run, startLumi, daq, dqmRunKey, ecalIn, esIn, logFile):
             procs['Calibration'] = (proc, log)
 
         if esIn:
+            commonOptions = 'runNumber={run} runInputDir={inputDir} workflow=/{dataset}/{period}/MiniDAQ prescaleFactor={factor}'.format(run = run, inputDir = '/dqmminidaq', dataset = workflowBase, period = config.period, factor = 10)
             log = open(config.logdir + '/es_dqm_sourceclient-privlive_cfg.log', 'a')
             log.write('\n\n\n')
             command = 'source $HOME/DQM/cmssw.sh; exec cmsRun {conf} {common}'.format(conf = config.workdir + '/es_dqm_sourceclient-privlive_cfg.py', common = commonOptions)

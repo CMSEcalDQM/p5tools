@@ -18,6 +18,8 @@ options._tags.pop('numEvent%d')
 options._tagOrder.remove('numEvent%d')
 
 options.register("workflow", default = "", mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = "offline workflow")
+options.register("prescaleFactor", default = "10", mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.int, info = "prescale factor")
+options.register("scanOnce", default = False, mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.bool, info = "Don't repeat file scans: use what was found during the initial scan. EOR file is ignored and the state is set to 'past end of run")
 
 options.parseArguments()
 
@@ -69,7 +71,7 @@ process.ecalPreshowerRecHit.ESMIPADC = cms.double(50)
 process.ecalPreshowerRecHit.ESdigiCollection = cms.InputTag("esRawToDigi")
 process.ecalPreshowerRecHit.ESRecoAlgo = cms.int32(0)
 
-process.preScaler.prescaleFactor = 1
+process.preScaler.prescaleFactor = options.prescaleFactor
 
 #process.dqmInfoES = cms.EDAnalyzer("DQMEventInfo",
 #                                   subSystemFolder = cms.untracked.string('EcalPreshower')
@@ -143,3 +145,6 @@ process.maxEvents = cms.untracked.PSet(
 process.source.nextLumiTimeoutMillis = 5000
 process.source.delayMillis = 2000
 
+if options.scanOnce:
+    process.source.endOfRunKills = False
+    process.source.nextLumiTimeoutMillis = 0

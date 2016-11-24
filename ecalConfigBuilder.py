@@ -394,6 +394,11 @@ def buildEcalDQMModules(process, options):
         )
     )
 
+    #threads = 16
+    #process.options.numberOfThreads = cms.untracked.uint32(threads)
+    #process.options.numberOfStreams = cms.untracked.uint32(threads)
+    #process.options.sizeOfStackForThreadsInKB = cms.untracked.uint32(16*1024)
+
     ### SOURCE ###
     
     if live:
@@ -960,6 +965,7 @@ if options.outputFile:
         options.register('runkey', default = 'pp_run', mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = 'Run Keys of CMS')
         options.register('collector', default = "", mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.string, info = 'Collector configuration (host:port)')
         options.register('verbosity', default = 0, mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.int, info = 'ECAL DQM verbosity')
+        options.register("scanOnce", default = False, mult = VarParsing.multiplicity.singleton, mytype = VarParsing.varType.bool, info = "Don't repeat file scans: use what was found during the initial scan. EOR file is ignored and the state is set to 'past end of run")
 
         options.parseArguments()
 
@@ -1022,4 +1028,6 @@ if options.outputFile:
         #process.source.minEventsPerLumi = 100
         process.source.minEventsPerLumi = -1
         process.source.nextLumiTimeoutMillis = 3000
-
+        if options.scanOnce:
+            process.source.endOfRunKills = False
+            process.source.nextLumiTimeoutMillis = 0
