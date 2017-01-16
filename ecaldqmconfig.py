@@ -24,7 +24,8 @@ config = ConfigNode()
 
 config.workdir = '/nfshome0/ecalpro/DQM/p5tools'
 
-config.period = 'Run2016'
+#config.period = 'Run2016'
+config.period = 'Run2017'
 
 config.logdir = '/data/dqm-data/logs'
 config.tmpoutdir = '/data/dqm-data/tmp'
