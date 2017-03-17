@@ -1,5 +1,5 @@
 TEST = False
-#TEST = True
+# TEST = True
 
 class ConfigNode:
     def __init__(self):
@@ -24,11 +24,15 @@ config = ConfigNode()
 
 config.workdir = '/nfshome0/ecalpro/DQM/p5tools'
 
-#config.period = 'Run2016'
+# config.period = 'Run2016'
 config.period = 'Run2017'
 
 config.logdir = '/data/dqm-data/logs'
+if TEST:
+    config.logdir = '/nfshome0/ecalpro/DQM/TEST_LOGS'
 config.tmpoutdir = '/data/dqm-data/tmp'
+if TEST:
+    config.tmpoutdir = '/nfshome0/ecalpro/DQM/TEST_TMP'
 #config.tmpoutdir = '/data/test'
 
 config.prescale = 50

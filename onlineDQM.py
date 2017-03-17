@@ -13,6 +13,8 @@ from logger import Logger
 
 VERBOSITY = 0
 
+DEBUG_PRINT_LEVEL = 3
+
 class GlobalRunFileCopyDaemon(object):
     # TEMPORARY SOLUTION (SEE BELOW)
     def __init__(self, run, startLumi, runInputDir, sources, logFile):
@@ -155,6 +157,8 @@ def startDQM(run, startLumi, daq, dqmRunKey, ecalIn, esIn, logFile):
         workflowBase = 'HeavyIons'
     else:
         workflowBase = 'All'
+
+    if (DEBUG_PRINT_LEVEL > 1): logFile.write('workflowBase = %s'%(workflowBase))
 
     procs = {}
 
@@ -374,10 +378,10 @@ def processRun(currentRun, startLumi, logFile, ecalCondDB, runParamDB, isLatestR
             esInNew = (runParamDB.getRunParameter(newRun, 'CMS.LVL0:ES').lower() == 'in')
             if currentRun < newRun:
                 if daqNew == 'minidaq':
-                    #logFile.write('New minidaq run started: Closing run %d.' % currentRun)
+                    if (DEBUG_PRINT_LEVEL > 1) : logFile.write('New minidaq run started: Closing run %d.' % currentRun)
                     open(runDir + '/run%d_ls0000_EoR.jsn' % currentRun, 'w').close()
                 elif daqNew == 'central' and (ecalInNew and esInNew):
-                    #logFile.write('Ecal and ES back in global: Closing run %d.' % currentRun)
+                    if (DEBUG_PRINT_LEVEL > 1) : logFile.write('Ecal and ES back in global: Closing run %d.' % currentRun)
                     open(runDir + '/run%d_ls0000_EoR.jsn' % currentRun, 'w').close()
 #        else:
 #            if daq == 'central' and not copyThread.isAlive():
@@ -406,17 +410,21 @@ def processRun(currentRun, startLumi, logFile, ecalCondDB, runParamDB, isLatestR
         elif daq == 'central':
             result = SUCCESS
         if result == SUCCESS:
-            logFile.write('Copying ROOT file to closed')
+            logFile.write('Copying ROOT file(s) to closed')
 
             runname = 'R%09d'%currentRun 
             for filename in os.listdir(config.tmpoutdir):
                 if runname in filename:
                     source_file=config.tmpoutdir+'/'+filename
                     destination_file=config.tmpoutdir+'/closed/'+filename
+                    if (DEBUG_PRINT_LEVEL > 1): logFile.write("Found: %s, moving to: %s"%(source_file, destination_file))
                     try:
                         os.rename(source_file,destination_file)
                     except OSError:
-                        pass
+                        if (DEBUG_PRINT_LEVEL > 1):
+                            logFile.write("Unable to move file!")
+                        else:
+                            pass
 
     else:
         logFile.write('CMSSW job failed.')
