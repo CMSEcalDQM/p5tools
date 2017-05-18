@@ -10,6 +10,7 @@ if [ $1 = "start" ]; then
 	exit
     fi
 
+    rm *.pyc || echo "No compiled python files present"
     screen -d -m -S onlineDQM $HOME/DQM/p5tools/runOnlineDQM.sh $2 $3
 
 elif [ $1 = "stop" ]; then
