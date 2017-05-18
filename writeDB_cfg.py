@@ -61,6 +61,7 @@ process.load("Configuration.StandardSequences.GeometryRecoDB_cff")
 #process.load("Geometry.EcalMapping.EcalMappingRecord_cfi")
 
 process.load("DQM.Integration.config.FrontierCondition_GT_cfi")
+process.GlobalTag.connect = cms.string("frontier://(proxyurl=http://localhost:3128)(serverurl=http://localhost:8000/FrontierProd)(serverurl=http://localhost:8000/FrontierProd)(retrieve-ziplevel=0)(failovertoserver=no)/CMS_CONDITIONS")
 
 process.MessageLogger = cms.Service('MessageLogger',
     destinations = cms.untracked.vstring('cout'),

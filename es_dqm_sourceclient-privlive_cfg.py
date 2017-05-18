@@ -56,6 +56,8 @@ process.source.endOfRunKills = False
 
 # Condition for P5 cluster
 process.load("DQM.Integration.config.FrontierCondition_GT_cfi")
+# Added by TM, 28 Apr 2017
+process.GlobalTag.connect = cms.string("frontier://(proxyurl=http://localhost:3128)(serverurl=http://localhost:8000/FrontierProd)(serverurl=http://localhost:8000/FrontierProd)(retrieve-ziplevel=0)(failovertoserver=no)/CMS_CONDITIONS")
 # Condition for lxplus
 #process.load("DQM.Integration.config.FrontierCondition_GT_Offline_cfi") 
 

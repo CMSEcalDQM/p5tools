@@ -346,6 +346,10 @@ def buildEcalDQMModules(process, options):
 
     if p5:
         process.load('DQM.Integration.config.FrontierCondition_GT_cfi')
+        # process.load("Configuration.StandardSequences.FrontierConditions_GlobalTag_cff")
+        process.GlobalTag.connect = cms.string("frontier://(proxyurl=http://localhost:3128)(serverurl=http://localhost:8000/FrontierProd)(serverurl=http://localhost:8000/FrontierProd)(retrieve-ziplevel=0)(failovertoserver=no)/CMS_CONDITIONS")
+        # process.GlobalTag.connect = cms.string("frontier://(proxyurl=http://localhost:3128)(serverurl=http://localhost:8000/FrontierOnProd)(serverurl=http://localhost:8000/FrontierOnProd)(retrieve-ziplevel=0)(failovertoserver=no)/CMS_CONDITIONS")
+        # process.GlobalTag.globaltag = "90X_dataRun2_HLT_v2"
     else:
         process.load("Configuration.StandardSequences.FrontierConditions_GlobalTag_cff")
         if options.globalTag.startswith('auto:'):
@@ -355,7 +359,6 @@ def buildEcalDQMModules(process, options):
             process.GlobalTag.globaltag = options.globalTag
 
     connect = process.GlobalTag.connect.value()
-   
     process.GlobalTag.toGet = cms.VPSet(
         cms.PSet(
             record = cms.string("EcalDQMChannelStatusRcd"),
@@ -408,9 +411,11 @@ def buildEcalDQMModules(process, options):
         if not central:
             pass
 #            process.source.endOfRunKills = False
-        if calib and options.cfgType != 'CalibrationStandalone':
+        if calib and options.cfgType != 'CalibrationStandalone': # i.e. options.cfgType == 'Calibration'
 #            process.source.streamLabel = 'streamDQMCalibration'
             process.source.streamLabel = 'streamLookArea'
+        # if calib and options.cfgType == 'CalibrationStandalone':
+        #     process.source.streamLabel = 'streamA'
 
     else:
         if '.dat' in options.inputFiles[0]:
