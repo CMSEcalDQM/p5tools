@@ -1,2 +1,7 @@
 *~
 *.pyc
+*.log
+rmEoR.sh
+*_devel*
+runDBwrite.sh
+runTest*.sh
